@@ -339,6 +339,11 @@ public class NPCInvWithLinq : BaseSettingsPlugin<NPCInvWithLinqSettings>
         }
     }
 
+    internal void ReloadRules()
+    {
+        LoadRuleFiles();
+    }
+
     private List<WindowSet> UpdateCurrentTradeWindow(List<WindowSet> previousValue)
     {
         var previousDict = previousValue?.ToDictionary(x => (x.Title, x.Inventory.Address, x.Inventory.ServerRequestCounter, x.IsVisible, x.TradeWindowItems.Count));

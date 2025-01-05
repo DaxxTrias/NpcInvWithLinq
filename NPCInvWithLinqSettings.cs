@@ -89,7 +89,10 @@ public class NPCInvWithLinqSettings : ISettings
 
                 var refToggle = tempNpcInvRules[i].Enabled;
                 if (ImGui.Checkbox($"{tempNpcInvRules[i].Name}##checkbox{i}", ref refToggle))
+                {
                     tempNpcInvRules[i].Enabled = refToggle;
+                    plugin.ReloadRules();
+                }
 
                 ImGui.SameLine();
                 var color = new Vector4(_parent.FilterColors[i].Value.R / 255.0f, _parent.FilterColors[i].Value.G / 255.0f, _parent.FilterColors[i].Value.B / 255.0f, _parent.FilterColors[i].Value.A / 255.0f);
