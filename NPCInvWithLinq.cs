@@ -277,6 +277,7 @@ public class NPCInvWithLinq : BaseSettingsPlugin<NPCInvWithLinqSettings>
     {
         var pickitConfigFileDirectory = ConfigDirectory;
         var existingRules = Settings.NPCInvRules;
+        var existingColors = Settings.FilterColors;
 
         if (!string.IsNullOrEmpty(Settings.CustomConfigDir))
         {
@@ -319,7 +320,18 @@ public class NPCInvWithLinq : BaseSettingsPlugin<NPCInvWithLinqSettings>
             Settings.NPCInvRules = newRules;
 
             // Initialize FilterColors for each filter
-            Settings.FilterColors = newRules.Select(rule => new ColorNode(Color.Red)).ToList();
+            Settings.FilterColors = new List<ColorNode>();
+            for (int i = 0; i < newRules.Count; i++)
+            {
+                if (i < existingColors.Count)
+                {
+                    Settings.FilterColors.Add(existingColors[i]);
+                }
+                else
+                {
+                    Settings.FilterColors.Add(new ColorNode(Color.Red));
+                }
+            }
         }
         catch (Exception e)
         {
