@@ -7,6 +7,7 @@ using System.Drawing;
 using System.IO;
 using System.Text.Json.Serialization;
 using ImGuiNET;
+using System.Numerics;
 
 namespace NPCInvWithLinq;
 
@@ -15,12 +16,14 @@ public class NPCInvWithLinqSettings : ISettings
     public NPCInvWithLinqSettings()
     {
         RuleConfig = new RuleRenderer(this);
+        FilterColors = new List<ColorNode>();
     }
 
     public ToggleNode Enable { get; set; } = new ToggleNode(false);
     public ToggleNode DrawOnTabLabels { get; set; } = new ToggleNode(true);
-    public ColorNode FrameColor { get; set; } = new ColorNode(Color.Red);
+    public ColorNode DefaultFrameColor { get; set; } = new ColorNode(Color.Red);
     public RangeNode<int> FrameThickness { get; set; } = new RangeNode<int>(1, 1, 20);
+    public List<ColorNode> FilterColors { get; set; }
 
     [JsonIgnore]
     public TextNode FilterTest { get; set; } = new TextNode();
@@ -87,6 +90,11 @@ public class NPCInvWithLinqSettings : ISettings
                 var refToggle = tempNpcInvRules[i].Enabled;
                 if (ImGui.Checkbox($"{tempNpcInvRules[i].Name}##checkbox{i}", ref refToggle))
                     tempNpcInvRules[i].Enabled = refToggle;
+
+                ImGui.SameLine();
+                var color = new Vector4(_parent.FilterColors[i].Value.R / 255.0f, _parent.FilterColors[i].Value.G / 255.0f, _parent.FilterColors[i].Value.B / 255.0f, _parent.FilterColors[i].Value.A / 255.0f);
+                if (ImGui.ColorEdit4($"##colorPicker{i}", ref color))
+                    _parent.FilterColors[i].Value = Color.FromArgb((int)(color.W * 255), (int)(color.X * 255), (int)(color.Y * 255), (int)(color.Z * 255));
             }
 
             _parent.NPCInvRules = tempNpcInvRules;
