@@ -80,7 +80,8 @@ public class NPCInvWithLinq : BaseSettingsPlugin<NPCInvWithLinqSettings>
     {
         if (!GameController.IngameState.IngameUi.QuestRewardWindow.IsVisible) return;
 
-        foreach (var reward in _rewardItems?.Value.Where(x => _itemFilters.Any(y => y.Matches(x))) ?? Enumerable.Empty<CustomItemData>())
+        foreach (var reward in _rewardItems?.Value.Where(x => _itemFilters.Any(y => y.Matches(x) && 
+            Settings.NPCInvRules[_itemFilters.IndexOf(y)].Enabled)) ?? Enumerable.Empty<CustomItemData>())
         {
             var frameColor = GetFilterColor(reward);
             if (hoveredItem != null && hoveredItem.Tooltip.GetClientRectCache.Intersects(reward.ClientRectangle) && hoveredItem.Entity.Address != reward.Entity.Address)
@@ -95,7 +96,8 @@ public class NPCInvWithLinq : BaseSettingsPlugin<NPCInvWithLinqSettings>
     {
         if (!GameController.IngameState.IngameUi.RitualWindow.IsVisible) return;
 
-        foreach (var reward in _ritualItems?.Value.Where(x => _itemFilters.Any(y => y.Matches(x))) ?? Enumerable.Empty<CustomItemData>())
+        foreach (var reward in _ritualItems?.Value.Where(x => _itemFilters.Any(y => y.Matches(x) && 
+            Settings.NPCInvRules[_itemFilters.IndexOf(y)].Enabled)) ?? Enumerable.Empty<CustomItemData>())
         {
             var frameColor = GetFilterColor(reward);
             if (hoveredItem != null && hoveredItem.Tooltip.GetClientRectCache.Intersects(reward.ClientRectangle) && hoveredItem.Entity.Address != reward.Entity.Address)
@@ -277,7 +279,6 @@ public class NPCInvWithLinq : BaseSettingsPlugin<NPCInvWithLinqSettings>
     {
         var pickitConfigFileDirectory = ConfigDirectory;
         var existingRules = Settings.NPCInvRules;
-        var existingColors = Settings.FilterColors;
 
         if (!string.IsNullOrEmpty(Settings.CustomConfigDir))
         {
@@ -318,20 +319,6 @@ public class NPCInvWithLinq : BaseSettingsPlugin<NPCInvWithLinqSettings>
                 .ToList();
 
             Settings.NPCInvRules = newRules;
-
-            // Initialize FilterColors for each filter
-            Settings.FilterColors = new List<ColorNode>();
-            for (int i = 0; i < newRules.Count; i++)
-            {
-                if (i < existingColors.Count)
-                {
-                    Settings.FilterColors.Add(existingColors[i]);
-                }
-                else
-                {
-                    Settings.FilterColors.Add(new ColorNode(Color.Red));
-                }
-            }
         }
         catch (Exception e)
         {
@@ -403,9 +390,9 @@ public class NPCInvWithLinq : BaseSettingsPlugin<NPCInvWithLinqSettings>
     {
         for (int i = 0; i < _itemFilters.Count; i++)
         {
-            if (_itemFilters[i].Matches(item))
+            if (Settings.NPCInvRules[i].Enabled && _itemFilters[i].Matches(item))
             {
-                return Settings.FilterColors[i];
+                return Settings.NPCInvRules[i].Color;
             }
         }
         return Settings.DefaultFrameColor;

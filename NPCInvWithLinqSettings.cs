@@ -13,17 +13,17 @@ namespace NPCInvWithLinq;
 
 public class NPCInvWithLinqSettings : ISettings
 {
+    private bool _reloadRequired = false;
+
     public NPCInvWithLinqSettings()
     {
         RuleConfig = new RuleRenderer(this);
-        FilterColors = new List<ColorNode>();
     }
 
     public ToggleNode Enable { get; set; } = new ToggleNode(false);
     public ToggleNode DrawOnTabLabels { get; set; } = new ToggleNode(true);
     public ColorNode DefaultFrameColor { get; set; } = new ColorNode(Color.Red);
     public RangeNode<int> FrameThickness { get; set; } = new RangeNode<int>(1, 1, 20);
-    public List<ColorNode> FilterColors { get; set; }
 
     [JsonIgnore]
     public TextNode FilterTest { get; set; } = new TextNode();
@@ -74,14 +74,20 @@ public class NPCInvWithLinqSettings : ISettings
             for (int i = 0; i < tempNpcInvRules.Count; i++)
             {
                 if (ImGui.ArrowButton($"##upButton{i}", ImGuiDir.Up) && i > 0)
+                {
                     (tempNpcInvRules[i - 1], tempNpcInvRules[i]) = (tempNpcInvRules[i], tempNpcInvRules[i - 1]);
+                    _parent._reloadRequired = true;
+                }
 
                 ImGui.SameLine();
                 ImGui.Text(" ");
                 ImGui.SameLine();
 
                 if (ImGui.ArrowButton($"##downButton{i}", ImGuiDir.Down) && i < tempNpcInvRules.Count - 1)
+                {
                     (tempNpcInvRules[i + 1], tempNpcInvRules[i]) = (tempNpcInvRules[i], tempNpcInvRules[i + 1]);
+                    _parent._reloadRequired = true;
+                }
 
                 ImGui.SameLine();
                 ImGui.Text(" - ");
@@ -95,12 +101,18 @@ public class NPCInvWithLinqSettings : ISettings
                 }
 
                 ImGui.SameLine();
-                var color = new Vector4(_parent.FilterColors[i].Value.R / 255.0f, _parent.FilterColors[i].Value.G / 255.0f, _parent.FilterColors[i].Value.B / 255.0f, _parent.FilterColors[i].Value.A / 255.0f);
+                var color = new Vector4(tempNpcInvRules[i].Color.Value.R / 255.0f, tempNpcInvRules[i].Color.Value.G / 255.0f, tempNpcInvRules[i].Color.Value.B / 255.0f, tempNpcInvRules[i].Color.Value.A / 255.0f);
                 if (ImGui.ColorEdit4($"##colorPicker{i}", ref color))
-                    _parent.FilterColors[i].Value = Color.FromArgb((int)(color.W * 255), (int)(color.X * 255), (int)(color.Y * 255), (int)(color.Z * 255));
+                    tempNpcInvRules[i].Color.Value = Color.FromArgb((int)(color.W * 255), (int)(color.X * 255), (int)(color.Y * 255), (int)(color.Z * 255));
             }
 
             _parent.NPCInvRules = tempNpcInvRules;
+
+            if (_parent._reloadRequired)
+            {
+                plugin.ReloadRules();
+                _parent._reloadRequired = false;
+            }
         }
     }
 }
@@ -110,6 +122,7 @@ public class NPCInvRule
     public string Name { get; set; } = "";
     public string Location { get; set; } = "";
     public bool Enabled { get; set; } = false;
+    public ColorNode Color { get; set; } = new ColorNode(System.Drawing.Color.Red);
 
     public NPCInvRule(string name, string location, bool enabled)
     {
