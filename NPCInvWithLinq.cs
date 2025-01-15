@@ -229,8 +229,6 @@ public class NPCInvWithLinq : BaseSettingsPlugin<NPCInvWithLinqSettings>
 
     private void DrawTabNameElementFrame(Element tabNameElement, Element hoveredItem)
     {
-        if (tabNameElement == null) return;
-
         var frameColor = Settings.DefaultFrameColor;
         if (hoveredItem == null || !hoveredItem.Tooltip.GetClientRectCache.Intersects(tabNameElement.GetClientRectCache))
         {
