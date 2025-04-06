@@ -21,6 +21,7 @@ public class NPCInvWithLinqSettings : ISettings
     }
 
     public ToggleNode Enable { get; set; } = new ToggleNode(false);
+    [Menu("Draw On Tab Labels", "Draw outline on vendor tabs if filter match is detected")]
     public ToggleNode DrawOnTabLabels { get; set; } = new ToggleNode(true);
     public ColorNode DefaultFrameColor { get; set; } = new ColorNode(Color.Red);
     public RangeNode<int> FrameThickness { get; set; } = new RangeNode<int>(1, 1, 20);
