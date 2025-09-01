@@ -242,14 +242,45 @@ public class NPCInvWithLinq : BaseSettingsPlugin<NPCInvWithLinqSettings>
 
     private void DrawTabNameElementFrame(Element tabNameElement, Element hoveredItem)
     {
-        var frameColor = Settings.DefaultFrameColor;
-        if (hoveredItem == null || !hoveredItem.Tooltip.GetClientRectCache.Intersects(tabNameElement.GetClientRectCache))
+        // Validate element and its rectangle before drawing to prevent label-jumping and invalid draws
+        if (tabNameElement == null)
+            return;
+
+        RectangleF rect;
+        try
         {
-            Graphics.DrawFrame(tabNameElement.GetClientRectCache, frameColor, Settings.FrameThickness);
+            rect = tabNameElement.GetClientRectCache;
+        }
+        catch
+        {
+            return;
+        }
+
+        if (rect.Width <= 1 || rect.Height <= 1)
+            return;
+
+        var frameColor = Settings.DefaultFrameColor;
+
+        bool intersectsHovered = false;
+        if (hoveredItem != null)
+        {
+            try
+            {
+                intersectsHovered = hoveredItem.Tooltip.GetClientRectCache.Intersects(rect);
+            }
+            catch
+            {
+                intersectsHovered = false;
+            }
+        }
+
+        if (!intersectsHovered)
+        {
+            Graphics.DrawFrame(rect, frameColor, Settings.FrameThickness);
         }
         else
         {
-            Graphics.DrawFrame(tabNameElement.GetClientRectCache, frameColor.Value.ToImguiVec4(45).ToColor(), Settings.FrameThickness);
+            Graphics.DrawFrame(rect, frameColor.Value.ToImguiVec4(45).ToColor(), Settings.FrameThickness);
         }
     }
 
@@ -386,6 +417,16 @@ public class NPCInvWithLinq : BaseSettingsPlugin<NPCInvWithLinqSettings>
                 if (previousDict?.TryGetValue((title, serverInventory?.Address ?? 0, serverInventory?.ServerRequestCounter ?? -1, isVisible, visibleValidUiItems.Count),
                         out var previousSet) == true)
                 {
+                    // Refresh the tab header Element each frame to avoid stale rectangles (label-jumping)
+                    var refreshedTabButton = TryGetRef(() => inventory.TabButton);
+                    if (refreshedTabButton != null)
+                    {
+                        previousSet.TabNameElement = refreshedTabButton;
+                    }
+
+                    // Keep visibility in sync in case it changed but the cache key still matched
+                    previousSet.IsVisible = isVisible;
+
                     return previousSet;
                 }
 
