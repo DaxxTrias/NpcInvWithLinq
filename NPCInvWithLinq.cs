@@ -80,8 +80,8 @@ public class NPCInvWithLinq : BaseSettingsPlugin<NPCInvWithLinqSettings>
     {
         if (!GameController.IngameState.IngameUi.QuestRewardWindow.IsVisible) return;
 
-        foreach (var reward in _rewardItems?.Value.Where(x => _itemFilters.Any(y => y.Matches(x) && 
-            Settings.NPCInvRules[_itemFilters.IndexOf(y)].Enabled)) ?? Enumerable.Empty<CustomItemData>())
+        foreach (var reward in _rewardItems?.Value.Where(x => _itemFilters?.Any(y => y.Matches(x) && 
+            Settings.NPCInvRules[_itemFilters.IndexOf(y)].Enabled) == true) ?? Enumerable.Empty<CustomItemData>())
         {
             var frameColor = GetFilterColor(reward);
             if (hoveredItem != null && hoveredItem.Tooltip.GetClientRectCache.Intersects(reward.ClientRectangle) && hoveredItem.Entity.Address != reward.Entity.Address)
@@ -96,8 +96,8 @@ public class NPCInvWithLinq : BaseSettingsPlugin<NPCInvWithLinqSettings>
     {
         if (!GameController.IngameState.IngameUi.RitualWindow.IsVisible) return;
 
-        foreach (var reward in _ritualItems?.Value.Where(x => _itemFilters.Any(y => y.Matches(x) && 
-            Settings.NPCInvRules[_itemFilters.IndexOf(y)].Enabled)) ?? Enumerable.Empty<CustomItemData>())
+        foreach (var reward in _ritualItems?.Value.Where(x => _itemFilters?.Any(y => y.Matches(x) && 
+            Settings.NPCInvRules[_itemFilters.IndexOf(y)].Enabled) == true) ?? Enumerable.Empty<CustomItemData>())
         {
             var frameColor = GetFilterColor(reward);
             if (hoveredItem != null && hoveredItem.Tooltip.GetClientRectCache.Intersects(reward.ClientRectangle) && hoveredItem.Entity.Address != reward.Entity.Address)
@@ -129,6 +129,8 @@ public class NPCInvWithLinq : BaseSettingsPlugin<NPCInvWithLinqSettings>
         ProcessStoredTabs(unSeenItems, hoveredItem);
 
         PurchaseWindow purchaseWindowItems = GetVisiblePurchaseWindow();
+        if (unSeenItems.Count == 0 || purchaseWindowItems?.TabContainer == null)
+            return;
         var serverItemsBox = CalculateServerItemsBox(unSeenItems, purchaseWindowItems);
 
         DrawServerItems(serverItemsBox, unSeenItems, hoveredItem);
@@ -136,6 +138,7 @@ public class NPCInvWithLinq : BaseSettingsPlugin<NPCInvWithLinqSettings>
 
     private void DrawServerItems(RectangleF serverItemsBox, List<string> unSeenItems, Element hoveredItem)
     {
+        if (unSeenItems == null || unSeenItems.Count == 0) return;
         if (hoveredItem == null || !hoveredItem.Tooltip.GetClientRectCache.Intersects(serverItemsBox))
         {
             var boxColor = Color.FromArgb(150, 0, 0, 0);
@@ -161,7 +164,7 @@ public class NPCInvWithLinq : BaseSettingsPlugin<NPCInvWithLinqSettings>
 
     private bool IsPurchaseWindowVisible()
     {
-        return _purchaseWindowHideout.IsVisible || _purchaseWindow.IsVisible;
+        return (_purchaseWindowHideout?.IsVisible ?? false) || (_purchaseWindow?.IsVisible ?? false);
     }
 
     private void ProcessStoredTabs(List<string> unSeenItems, Element hoveredItem)
@@ -260,7 +263,7 @@ public class NPCInvWithLinq : BaseSettingsPlugin<NPCInvWithLinqSettings>
 
     private PurchaseWindow GetVisiblePurchaseWindow()
     {
-        return _purchaseWindowHideout.IsVisible ? _purchaseWindowHideout : _purchaseWindow.IsVisible ? _purchaseWindow : null;
+        return (_purchaseWindowHideout?.IsVisible ?? false) ? _purchaseWindowHideout : ((_purchaseWindow?.IsVisible ?? false) ? _purchaseWindow : null);
     }
 
     private void PerformItemFilterTest(Element hoveredItem)
@@ -331,51 +334,58 @@ public class NPCInvWithLinq : BaseSettingsPlugin<NPCInvWithLinqSettings>
 
     private List<WindowSet> UpdateCurrentTradeWindow(List<WindowSet> previousValue)
     {
-        var previousDict = previousValue?.ToDictionary(x => (x.Title, x.Inventory.Address, x.Inventory.ServerRequestCounter, x.IsVisible, x.TradeWindowItems.Count));
-        var purchaseWindowItems = (_purchaseWindowHideout, _purchaseWindow) switch
-        {
-            ({ IsVisible: true } w, _) => w,
-            (_, { IsVisible: true } w) => w,
-            _ => null,
-        };
+        var previousDict = previousValue?.ToDictionary(x => (x.Title, x.Inventory?.Address ?? 0, x.Inventory?.ServerRequestCounter ?? -1, x.IsVisible, x.TradeWindowItems?.Count ?? 0));
+        var purchaseWindowItems = GetVisiblePurchaseWindow();
 
-        if (purchaseWindowItems == null)
+        if (purchaseWindowItems == null || purchaseWindowItems.TabContainer?.Inventories == null)
             return [];
 
         return purchaseWindowItems.TabContainer.Inventories.Select((inventory, i) =>
         {
-            var uiInventory = inventory?.Inventory;
-            if (uiInventory == null) return null;
-            var serverInventory = uiInventory.ServerInventory;
-            if (serverInventory == null)
+            try
             {
-                DebugWindow.LogError($"Server inventory for ui inventory {uiInventory} ({uiInventory.InvType}) is missing");
+                if (inventory == null) return null;
+
+                var uiInventory = TryGetRef(() => inventory.Inventory);
+                if (uiInventory == null) return null;
+
+                var serverInventory = TryGetRef(() => uiInventory.ServerInventory);
+                if (serverInventory == null)
+                {
+                    // Server inventory may briefly be missing while the UI updates; skip this tab safely.
+                    return null;
+                }
+
+                var isVisible = TryGetValue(() => uiInventory.IsVisible);
+                var visibleValidUiItems = TryGetRef(() => uiInventory.VisibleInventoryItems)?.Where(x => x?.Item?.Path != null).ToList() ?? [];
+                var title = $"-{i + 1}-";
+                if (previousDict?.TryGetValue((title, serverInventory?.Address ?? 0, serverInventory?.ServerRequestCounter ?? -1, isVisible, visibleValidUiItems.Count),
+                        out var previousSet) == true)
+                {
+                    return previousSet;
+                }
+
+                var tabButton = TryGetRef(() => inventory.TabButton);
+                var newTab = new WindowSet
+                {
+                    Inventory = serverInventory,
+                    Index = i,
+                    ServerItems = serverInventory.Items.Where(x => x?.Path != null).Select(x => new CustomItemData(x, GameController, EKind.Shop)).ToList(),
+                    TradeWindowItems = visibleValidUiItems
+                        .Select(x => new CustomItemData(x.Item, GameController, EKind.Shop, x.GetClientRectCache))
+                        .ToList(),
+                    Title = title,
+                    IsVisible = isVisible,
+                    TabNameElement = tabButton
+                };
+
+                return newTab;
             }
-
-            var isVisible = uiInventory.IsVisible;
-            var visibleValidUiItems = uiInventory.VisibleInventoryItems
-                .Where(x => x.Item?.Path != null).ToList();
-            var title = $"-{i + 1}-";
-            if (previousDict?.TryGetValue((title, serverInventory?.Address ?? 0, serverInventory?.ServerRequestCounter ?? -1, isVisible, visibleValidUiItems.Count),
-                    out var previousSet) == true)
+            catch
             {
-                return previousSet;
+                // Any transient failure reading volatile UI/memory should not crash the render loop; skip this tab.
+                return null;
             }
-
-            var newTab = new WindowSet
-            {
-                Inventory = serverInventory,
-                Index = i,
-                ServerItems = serverInventory?.Items.Where(x => x?.Path != null).Select(x => new CustomItemData(x, GameController, EKind.Shop)).ToList() ?? [],
-                TradeWindowItems = visibleValidUiItems
-                    .Select(x => new CustomItemData(x.Item, GameController, EKind.Shop, x.GetClientRectCache))
-                    .ToList(),
-                Title = title,
-                IsVisible = isVisible,
-                TabNameElement = inventory.TabButton
-            };
-
-            return newTab;
         }).Where(x => x != null).ToList();
     }
 
@@ -386,6 +396,8 @@ public class NPCInvWithLinq : BaseSettingsPlugin<NPCInvWithLinqSettings>
 
     private ColorNode GetFilterColor(CustomItemData item)
     {
+        if (_itemFilters == null || _itemFilters.Count == 0)
+            return Settings.DefaultFrameColor;
         for (int i = 0; i < _itemFilters.Count; i++)
         {
             if (Settings.NPCInvRules[i].Enabled && _itemFilters[i].Matches(item))
@@ -394,5 +406,15 @@ public class NPCInvWithLinq : BaseSettingsPlugin<NPCInvWithLinqSettings>
             }
         }
         return Settings.DefaultFrameColor;
+    }
+
+    private static T? TryGetRef<T>(Func<T> getter) where T : class
+    {
+        try { return getter(); } catch { return null; }
+    }
+
+    private static T TryGetValue<T>(Func<T> getter) where T : struct
+    {
+        try { return getter(); } catch { return default; }
     }
 }
