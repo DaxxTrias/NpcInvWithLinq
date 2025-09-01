@@ -43,9 +43,21 @@ public class NPCInvWithLinq : BaseSettingsPlugin<NPCInvWithLinqSettings>
     private readonly CachedValue<List<WindowSet>> _storedStashAndWindows;
     private readonly CachedValue<List<CustomItemData>> _rewardItems;
     private readonly CachedValue<List<CustomItemData>> _ritualItems;
-    private List<ItemFilter<CustomItemData>> _itemFilters;
+    private List<RuleBinding> _ruleBindings;
     private PurchaseWindow _purchaseWindowHideout;
     private PurchaseWindow _purchaseWindow;
+
+    private sealed class RuleBinding
+    {
+        public NPCInvRule Rule { get; }
+        public ItemFilter<CustomItemData> Filter { get; }
+
+        public RuleBinding(NPCInvRule rule, ItemFilter<CustomItemData> filter)
+        {
+            Rule = rule ?? throw new ArgumentNullException(nameof(rule));
+            Filter = filter; // may be null when rule is disabled; callers must guard
+        }
+    }
 
     public NPCInvWithLinq()
     {
@@ -80,8 +92,7 @@ public class NPCInvWithLinq : BaseSettingsPlugin<NPCInvWithLinqSettings>
     {
         if (!GameController.IngameState.IngameUi.QuestRewardWindow.IsVisible) return;
 
-        foreach (var reward in _rewardItems?.Value.Where(x => _itemFilters?.Any(y => y.Matches(x) && 
-            Settings.NPCInvRules[_itemFilters.IndexOf(y)].Enabled) == true) ?? Enumerable.Empty<CustomItemData>())
+        foreach (var reward in _rewardItems?.Value.Where(x => _ruleBindings?.Any(b => b.Rule.Enabled && b.Filter?.Matches(x) == true) == true) ?? Enumerable.Empty<CustomItemData>())
         {
             var frameColor = GetFilterColor(reward);
             if (hoveredItem != null && hoveredItem.Tooltip.GetClientRectCache.Intersects(reward.ClientRectangle) && hoveredItem.Entity.Address != reward.Entity.Address)
@@ -96,8 +107,7 @@ public class NPCInvWithLinq : BaseSettingsPlugin<NPCInvWithLinqSettings>
     {
         if (!GameController.IngameState.IngameUi.RitualWindow.IsVisible) return;
 
-        foreach (var reward in _ritualItems?.Value.Where(x => _itemFilters?.Any(y => y.Matches(x) && 
-            Settings.NPCInvRules[_itemFilters.IndexOf(y)].Enabled) == true) ?? Enumerable.Empty<CustomItemData>())
+        foreach (var reward in _ritualItems?.Value.Where(x => _ruleBindings?.Any(b => b.Rule.Enabled && b.Filter?.Matches(x) == true) == true) ?? Enumerable.Empty<CustomItemData>())
         {
             var frameColor = GetFilterColor(reward);
             if (hoveredItem != null && hoveredItem.Tooltip.GetClientRectCache.Intersects(reward.ClientRectangle) && hoveredItem.Entity.Address != reward.Entity.Address)
@@ -297,26 +307,40 @@ public class NPCInvWithLinq : BaseSettingsPlugin<NPCInvWithLinqSettings>
 
         try
         {
-            var newRules = new DirectoryInfo(pickitConfigFileDirectory).GetFiles("*.ifl")
+            // Discover all .ifl files on disk
+            var discovered = new DirectoryInfo(pickitConfigFileDirectory).GetFiles("*.ifl")
                 .Select(x => new NPCInvRule(x.Name, Path.GetRelativePath(pickitConfigFileDirectory, x.FullName), false))
-                .ExceptBy(existingRules.Select(x => x.Location), x => x.Location)
-                .ToList();
-            foreach (var groundRule in existingRules)
+                .ToDictionary(r => r.Location, r => r);
+
+            // Preserve current user-defined order for existing rules
+            var newRules = new List<NPCInvRule>();
+            foreach (var rule in existingRules)
             {
-                var fullPath = Path.Combine(pickitConfigFileDirectory, groundRule.Location);
+                var fullPath = Path.Combine(pickitConfigFileDirectory, rule.Location);
                 if (File.Exists(fullPath))
                 {
-                    newRules.Add(groundRule);
+                    newRules.Add(rule);
                 }
                 else
                 {
-                    LogError($"File '{groundRule.Name}' not found.");
+                    LogError($"File '{rule.Name}' not found.");
                 }
             }
 
-            _itemFilters = newRules
-                .Where(rule => rule.Enabled)
-                .Select(rule => ItemFilter.LoadFromPath<CustomItemData>(Path.Combine(pickitConfigFileDirectory, rule.Location)))
+            // Append any newly discovered files that weren't already present
+            foreach (var kv in discovered)
+            {
+                if (!newRules.Any(r => string.Equals(r.Location, kv.Key, StringComparison.OrdinalIgnoreCase)))
+                {
+                    newRules.Add(kv.Value);
+                }
+            }
+
+            // Build bindings in the same order as rules; disabled rules have null filters
+            _ruleBindings = newRules
+                .Select(rule => new RuleBinding(
+                    rule,
+                    rule.Enabled ? ItemFilter.LoadFromPath<CustomItemData>(Path.Combine(pickitConfigFileDirectory, rule.Location)) : null))
                 .ToList();
 
             Settings.NPCInvRules = newRules;
@@ -391,18 +415,20 @@ public class NPCInvWithLinq : BaseSettingsPlugin<NPCInvWithLinqSettings>
 
     private bool ItemInFilter(CustomItemData item)
     {
-        return _itemFilters?.Any(filter => filter.Matches(item)) ?? false;
+        return _ruleBindings?.Any(b => b.Rule.Enabled && b.Filter?.Matches(item) == true) ?? false;
     }
 
     private ColorNode GetFilterColor(CustomItemData item)
     {
-        if (_itemFilters == null || _itemFilters.Count == 0)
+        if (_ruleBindings == null || _ruleBindings.Count == 0)
             return Settings.DefaultFrameColor;
-        for (int i = 0; i < _itemFilters.Count; i++)
+
+        // Top-to-bottom precedence: the first enabled rule that matches decides the color
+        foreach (var binding in _ruleBindings)
         {
-            if (Settings.NPCInvRules[i].Enabled && _itemFilters[i].Matches(item))
+            if (binding.Rule.Enabled && binding.Filter?.Matches(item) == true)
             {
-                return Settings.NPCInvRules[i].Color;
+                return binding.Rule.Color;
             }
         }
         return Settings.DefaultFrameColor;
