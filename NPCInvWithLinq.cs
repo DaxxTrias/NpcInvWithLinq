@@ -149,6 +149,11 @@ public class NPCInvWithLinq : BaseSettingsPlugin<NPCInvWithLinqSettings>
     private void DrawServerItems(RectangleF serverItemsBox, List<string> unSeenItems, Element hoveredItem)
     {
         if (unSeenItems == null || unSeenItems.Count == 0) return;
+
+        // Skip drawing if the box is degenerate; prevents odd tiny boxes appearing at origin
+        if (serverItemsBox.Width <= 2 || serverItemsBox.Height <= 2)
+            return;
+
         if (hoveredItem == null || !hoveredItem.Tooltip.GetClientRectCache.Intersects(serverItemsBox))
         {
             var boxColor = Color.FromArgb(150, 0, 0, 0);
@@ -231,13 +236,30 @@ public class NPCInvWithLinq : BaseSettingsPlugin<NPCInvWithLinqSettings>
 
     private void DrawItemFrame(CustomItemData item, Element hoveredItem)
     {
+        var rect = item.ClientRectangle;
+        if (rect.Width <= 1 || rect.Height <= 1)
+            return;
+
         var frameColor = GetFilterColor(item);
-        if (hoveredItem != null && hoveredItem.Tooltip.GetClientRectCache.Intersects(item.ClientRectangle) && hoveredItem.Entity.Address != item.Entity.Address)
+        if (hoveredItem != null)
         {
-            frameColor = frameColor.Value.ToImguiVec4(45).ToColor();
+            bool intersectsHovered;
+            try
+            {
+                intersectsHovered = hoveredItem.Tooltip.GetClientRectCache.Intersects(rect) && hoveredItem.Entity.Address != item.Entity.Address;
+            }
+            catch
+            {
+                intersectsHovered = false;
+            }
+
+            if (intersectsHovered)
+            {
+                frameColor = frameColor.Value.ToImguiVec4(45).ToColor();
+            }
         }
 
-        Graphics.DrawFrame(item.ClientRectangle, frameColor, Settings.FrameThickness);
+        Graphics.DrawFrame(rect, frameColor, Settings.FrameThickness);
     }
 
     private void DrawTabNameElementFrame(Element tabNameElement, Element hoveredItem)
@@ -426,6 +448,26 @@ public class NPCInvWithLinq : BaseSettingsPlugin<NPCInvWithLinqSettings>
 
                     // Keep visibility in sync in case it changed but the cache key still matched
                     previousSet.IsVisible = isVisible;
+
+                    // IMPORTANT: Rebuild visible item rectangles each frame to avoid stale draws when
+                    // items change without a server request/count change.
+                    if (visibleValidUiItems.Count > 0)
+                    {
+                        previousSet.TradeWindowItems = visibleValidUiItems
+                            .Select(x => new CustomItemData(x.Item, GameController, EKind.Shop, x.GetClientRectCache))
+                            .ToList();
+                    }
+                    else
+                    {
+                        previousSet.TradeWindowItems = [];
+                    }
+
+                    // Keep server items fresh as well; cheap and avoids stale data when counts match
+                    // but contents differ.
+                    previousSet.ServerItems = serverInventory.Items
+                        .Where(x => x?.Path != null)
+                        .Select(x => new CustomItemData(x, GameController, EKind.Shop))
+                        .ToList();
 
                     return previousSet;
                 }
