@@ -79,7 +79,8 @@ public class NPCInvWithLinqSettings : ISettings
 
             ImGui.Separator();
             ImGui.BulletText("Select Rules To Load");
-            ImGui.BulletText("Ordering rule sets so general items will match first rather than last will improve performance");
+            ImGui.BulletText("Rules are evaluated top-to-bottom; higher entries have higher precedence (first match wins).");
+            ImGui.BulletText("Place specific rules higher and general/catch-all rules lower for correctness and speed.");
 
             var tempNpcInvRules = new List<NPCInvRule>(_parent.NPCInvRules); // Create a copy
 
