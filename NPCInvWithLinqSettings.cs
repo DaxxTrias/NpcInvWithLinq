@@ -102,9 +102,26 @@ public class NPCInvWithLinqSettings : ISettings
                 }
 
                 ImGui.SameLine();
-                var color = new Vector4(tempNpcInvRules[i].Color.Value.R / 255.0f, tempNpcInvRules[i].Color.Value.G / 255.0f, tempNpcInvRules[i].Color.Value.B / 255.0f, tempNpcInvRules[i].Color.Value.A / 255.0f);
-                if (ImGui.ColorEdit4($"##colorPicker{i}", ref color))
-                    tempNpcInvRules[i].Color.Value = Color.FromArgb((int)(color.W * 255), (int)(color.X * 255), (int)(color.Y * 255), (int)(color.Z * 255));
+                var color = new Vector4(
+                    tempNpcInvRules[i].Color.Value.R / 255.0f,
+                    tempNpcInvRules[i].Color.Value.G / 255.0f,
+                    tempNpcInvRules[i].Color.Value.B / 255.0f,
+                    tempNpcInvRules[i].Color.Value.A / 255.0f);
+
+                var previewFlags = ImGuiColorEditFlags.AlphaPreview | ImGuiColorEditFlags.AlphaPreviewHalf | ImGuiColorEditFlags.NoTooltip;
+                if (ImGui.ColorButton($"##colorBtn{i}", color, previewFlags, new Vector2(18f, 18f)))
+                {
+                    ImGui.OpenPopup($"##colorPopup{i}");
+                }
+                if (ImGui.BeginPopup($"##colorPopup{i}"))
+                {
+                    var pickerColor = color;
+                    if (ImGui.ColorPicker4($"##picker{i}", ref pickerColor, ImGuiColorEditFlags.AlphaBar | ImGuiColorEditFlags.DisplayRGB | ImGuiColorEditFlags.InputRGB | ImGuiColorEditFlags.AlphaPreview))
+                    {
+                        tempNpcInvRules[i].Color.Value = Color.FromArgb((int)(pickerColor.W * 255), (int)(pickerColor.X * 255), (int)(pickerColor.Y * 255), (int)(pickerColor.Z * 255));
+                    }
+                    ImGui.EndPopup();
+                }
             }
 
             _parent.NPCInvRules = tempNpcInvRules;
