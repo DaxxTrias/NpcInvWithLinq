@@ -517,6 +517,58 @@ public class NPCInvWithLinq : BaseSettingsPlugin<NPCInvWithLinqSettings>
         return Settings.DefaultFrameColor;
     }
 
+    private void AutoPurchaseItem(CustomItemData item)
+    {
+        if (item?.ClientRectangle == null || item.ClientRectangle.Width <= 1 || item.ClientRectangle.Height <= 1)
+            return;
+
+        try
+        {
+            // Get the center of the item rectangle
+            var rect = item.ClientRectangle;
+            var center = rect.Center;
+
+            // Make sure the click position is within the game window
+            var gameWindowRect = GameController.Window.GetWindowRectangleTimeCache with { Location = Vector2.Zero };
+            gameWindowRect.Inflate(-36, -36);
+
+            if (!gameWindowRect.Contains(center.X, center.Y))
+                return;
+
+            // Convert to screen coordinates
+            var screenPos = center + GameController.Window.GetWindowRectangleTimeCache.TopLeft;
+
+            // Move cursor to item and allow hover to update
+            Input.SetCursorPos(screenPos);
+            System.Threading.Thread.Sleep(35);
+
+            // Press and hold Ctrl for the entire click sequence
+            Input.KeyDown(Keys.LControlKey);
+            System.Threading.Thread.Sleep(25);
+
+            // Perform the click while Ctrl is held
+            Input.Click(MouseButtons.Left);
+
+            // Small tail to ensure modified click is processed before releasing
+            System.Threading.Thread.Sleep(15);
+
+            // Reset the purchase timer
+            _sinceLastPurchase.Restart();
+
+            LogMessage($"Auto-purchased: {item.Name}", 2);
+        }
+        catch (Exception ex)
+        {
+            LogError($"Error during auto-purchase: {ex.Message}");
+        }
+        finally
+        {
+            // Always release modifiers to prevent 'stuck key' behavior even on errors
+            Input.KeyUp(Keys.LControlKey);
+            Input.KeyUp(Keys.RControlKey);
+        }
+    }
+
     private static T? TryGetRef<T>(Func<T> getter) where T : class
     {
         try { return getter(); } catch { return null; }
