@@ -14,6 +14,8 @@ using System.Numerics;
 using ExileCore2.Shared.Nodes;
 using static NPCInvWithLinq.ServerAndStashWindow;
 using RectangleF = ExileCore2.Shared.RectangleF;
+using System.Diagnostics;
+using System.Windows.Forms;
 
 namespace NPCInvWithLinq;
 
@@ -46,6 +48,9 @@ public class NPCInvWithLinq : BaseSettingsPlugin<NPCInvWithLinqSettings>
     private List<RuleBinding> _ruleBindings;
     private PurchaseWindow _purchaseWindowHideout;
     private PurchaseWindow _purchaseWindow;
+    private readonly Stopwatch _sinceLastPurchase = Stopwatch.StartNew();
+    private readonly Dictionary<string, int> _purchasesPerTab = new();
+    private string _lastTabTitle = "";
 
     private sealed class RuleBinding
     {
@@ -69,6 +74,8 @@ public class NPCInvWithLinq : BaseSettingsPlugin<NPCInvWithLinqSettings>
     public override bool Initialise()
     {
         Settings.ReloadFilters.OnPressed = LoadRuleFiles;
+        Settings.AutoPurchaseToggleKey.OnValueChanged += () => Input.RegisterKey(Settings.AutoPurchaseToggleKey.Value);
+        Input.RegisterKey(Settings.AutoPurchaseToggleKey.Value);
         LoadRuleFiles();
         return true;
     }
@@ -77,6 +84,14 @@ public class NPCInvWithLinq : BaseSettingsPlugin<NPCInvWithLinqSettings>
     {
         _purchaseWindowHideout = GameController.Game.IngameState.IngameUi.PurchaseWindowHideout;
         _purchaseWindow = GameController.Game.IngameState.IngameUi.PurchaseWindow;
+        
+        // Handle auto-purchase toggle
+        if (Input.GetKeyState(Settings.AutoPurchaseToggleKey.Value))
+        {
+            Settings.AutoPurchase.Value = !Settings.AutoPurchase.Value;
+            var status = Settings.AutoPurchase.Value ? "enabled" : "disabled";
+            LogMessage($"Auto-purchase {status}", 3);
+        }
     }
 
     public override void Render()
@@ -187,17 +202,51 @@ public class NPCInvWithLinq : BaseSettingsPlugin<NPCInvWithLinqSettings>
         foreach (var storedTab in _storedStashAndWindows.Value)
         {
             if (storedTab.IsVisible)
-                ProcessVisibleTabItems(storedTab.TradeWindowItems, hoveredItem);
+                ProcessVisibleTabItems(storedTab.TradeWindowItems, hoveredItem, storedTab.Title);
             else
                 ProcessHiddenTabItems(storedTab, unSeenItems, hoveredItem);
         }
     }
 
-    private void ProcessVisibleTabItems(IEnumerable<CustomItemData> items, Element hoveredItem)
+    private void ProcessVisibleTabItems(IEnumerable<CustomItemData> items, Element hoveredItem, string tabTitle)
     {
-        foreach (var visibleItem in items.Where(item => item != null && ItemInFilter(item)))
+        // Track tab changes
+        if (_lastTabTitle != tabTitle)
         {
-            DrawItemFrame(visibleItem, hoveredItem);
+            _lastTabTitle = tabTitle;
+            // Reset purchase count for this tab if it's been re-opened
+            if (_purchasesPerTab.ContainsKey(tabTitle))
+                _purchasesPerTab[tabTitle] = 0;
+        }
+        
+        var itemsList = items.Where(item => item != null && ItemInFilter(item)).ToList();
+        
+        // Determine which item will be auto-purchased next
+        CustomItemData nextToPurchase = null;
+        if (Settings.AutoPurchase)
+        {
+            if (!_purchasesPerTab.TryGetValue(tabTitle, out var purchaseCount))
+                purchaseCount = 0;
+                
+            if (Settings.MaxPurchasesPerTab == 0 || purchaseCount < Settings.MaxPurchasesPerTab)
+            {
+                nextToPurchase = itemsList.FirstOrDefault();
+            }
+        }
+        
+        foreach (var visibleItem in itemsList)
+        {
+            DrawItemFrame(visibleItem, hoveredItem, visibleItem == nextToPurchase);
+        }
+        
+        // Auto-purchase logic
+        if (Settings.AutoPurchase && _sinceLastPurchase.ElapsedMilliseconds >= Settings.PurchaseDelay && nextToPurchase != null)
+        {
+            if (!_purchasesPerTab.TryGetValue(tabTitle, out var purchaseCount))
+                purchaseCount = 0;
+                
+            AutoPurchaseItem(nextToPurchase);
+            _purchasesPerTab[tabTitle] = purchaseCount + 1;
         }
     }
 
@@ -234,13 +283,13 @@ public class NPCInvWithLinq : BaseSettingsPlugin<NPCInvWithLinqSettings>
         }
     }
 
-    private void DrawItemFrame(CustomItemData item, Element hoveredItem)
+    private void DrawItemFrame(CustomItemData item, Element hoveredItem, bool isNextToPurchase = false)
     {
         var rect = item.ClientRectangle;
         if (rect.Width <= 1 || rect.Height <= 1)
             return;
 
-        var frameColor = GetFilterColor(item);
+        var frameColor = isNextToPurchase ? Settings.AutoPurchaseColor : GetFilterColor(item);
         if (hoveredItem != null)
         {
             bool intersectsHovered;
