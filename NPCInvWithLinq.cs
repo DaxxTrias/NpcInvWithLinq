@@ -49,6 +49,8 @@ public class NPCInvWithLinq : BaseSettingsPlugin<NPCInvWithLinqSettings>
     private PurchaseWindow _purchaseWindowHideout;
     private PurchaseWindow _purchaseWindow;
     private readonly Stopwatch _sinceLastPurchase = Stopwatch.StartNew();
+    private readonly Stopwatch _sinceLastToggle = Stopwatch.StartNew();
+    private bool _toggleKeyHeld;
     private readonly Dictionary<string, int> _purchasesPerTab = new();
     private string _lastTabTitle = "";
 
@@ -85,12 +87,22 @@ public class NPCInvWithLinq : BaseSettingsPlugin<NPCInvWithLinqSettings>
         _purchaseWindowHideout = GameController.Game.IngameState.IngameUi.PurchaseWindowHideout;
         _purchaseWindow = GameController.Game.IngameState.IngameUi.PurchaseWindow;
         
-        // Handle auto-purchase toggle
-        if (Input.GetKeyState(Settings.AutoPurchaseToggleKey.Value))
+        // Handle auto-purchase toggle with 1s debounce and edge detection
+        var isDown = Input.GetKeyState(Settings.AutoPurchaseToggleKey.Value);
+        if (isDown)
         {
-            Settings.AutoPurchase.Value = !Settings.AutoPurchase.Value;
-            var status = Settings.AutoPurchase.Value ? "enabled" : "disabled";
-            LogMessage($"Auto-purchase {status}", 3);
+            if (!_toggleKeyHeld && _sinceLastToggle.ElapsedMilliseconds >= 1000)
+            {
+                Settings.AutoPurchase.Value = !Settings.AutoPurchase.Value;
+                var status = Settings.AutoPurchase.Value ? "enabled" : "disabled";
+                LogMessage($"Auto-purchase {status}", 3);
+                _sinceLastToggle.Restart();
+            }
+            _toggleKeyHeld = true;
+        }
+        else
+        {
+            _toggleKeyHeld = false;
         }
     }
 
