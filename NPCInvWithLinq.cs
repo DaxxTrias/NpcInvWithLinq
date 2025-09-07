@@ -16,6 +16,8 @@ using static NPCInvWithLinq.ServerAndStashWindow;
 using RectangleF = ExileCore2.Shared.RectangleF;
 using System.Diagnostics;
 using System.Windows.Forms;
+using System.Text.RegularExpressions;
+using ExileCore2.PoEMemory.Components;
 
 namespace NPCInvWithLinq;
 
@@ -58,11 +60,15 @@ public class NPCInvWithLinq : BaseSettingsPlugin<NPCInvWithLinqSettings>
     {
         public NPCInvRule Rule { get; }
         public ItemFilter<CustomItemData> Filter { get; }
+        public int? MinOpenPrefixes { get; }
+        public int? MinOpenSuffixes { get; }
 
-        public RuleBinding(NPCInvRule rule, ItemFilter<CustomItemData> filter)
+        public RuleBinding(NPCInvRule rule, ItemFilter<CustomItemData> filter, int? minOpenPrefixes, int? minOpenSuffixes)
         {
             Rule = rule ?? throw new ArgumentNullException(nameof(rule));
             Filter = filter; // may be null when rule is disabled; callers must guard
+            MinOpenPrefixes = minOpenPrefixes;
+            MinOpenSuffixes = minOpenSuffixes;
         }
     }
 
@@ -119,7 +125,7 @@ public class NPCInvWithLinq : BaseSettingsPlugin<NPCInvWithLinqSettings>
     {
         if (!GameController.IngameState.IngameUi.QuestRewardWindow.IsVisible) return;
 
-        foreach (var reward in _rewardItems?.Value.Where(x => _ruleBindings?.Any(b => b.Rule.Enabled && b.Filter?.Matches(x) == true) == true) ?? Enumerable.Empty<CustomItemData>())
+        foreach (var reward in _rewardItems?.Value.Where(x => ItemInFilter(x)) ?? Enumerable.Empty<CustomItemData>())
         {
             var frameColor = GetFilterColor(reward);
             if (hoveredItem != null && hoveredItem.Tooltip.GetClientRectCache.Intersects(reward.ClientRectangle) && hoveredItem.Entity.Address != reward.Entity.Address)
@@ -134,7 +140,7 @@ public class NPCInvWithLinq : BaseSettingsPlugin<NPCInvWithLinqSettings>
     {
         if (!GameController.IngameState.IngameUi.RitualWindow.IsVisible) return;
 
-        foreach (var reward in _ritualItems?.Value.Where(x => _ruleBindings?.Any(b => b.Rule.Enabled && b.Filter?.Matches(x) == true) == true) ?? Enumerable.Empty<CustomItemData>())
+        foreach (var reward in _ritualItems?.Value.Where(x => ItemInFilter(x)) ?? Enumerable.Empty<CustomItemData>())
         {
             var frameColor = GetFilterColor(reward);
             if (hoveredItem != null && hoveredItem.Tooltip.GetClientRectCache.Intersects(reward.ClientRectangle) && hoveredItem.Entity.Address != reward.Entity.Address)
@@ -395,8 +401,13 @@ public class NPCInvWithLinq : BaseSettingsPlugin<NPCInvWithLinqSettings>
     {
         if (Settings.FilterTest.Value is { Length: > 0 } && hoveredItem != null)
         {
-            var filter = ItemFilter.LoadFromString(Settings.FilterTest);
-            var matched = filter.Matches(new ItemData(hoveredItem.Entity, GameController));
+            var expr = Settings.FilterTest;
+            TryExtractOpenCounts(expr, out var cleaned, out var minPref, out var minSuff);
+            var filter = ItemFilter.LoadFromString<CustomItemData>(cleaned);
+            var item = new CustomItemData(hoveredItem.Entity, GameController, EKind.Shop);
+            var openOk = (minPref is null || OpenPrefixCount(item) >= minPref)
+                         && (minSuff is null || OpenSuffixCount(item) >= minSuff);
+            var matched = openOk && filter.Matches(item);
             DebugWindow.LogMsg($"Debug item match on hover: {matched}");
         }
     }
@@ -452,11 +463,20 @@ public class NPCInvWithLinq : BaseSettingsPlugin<NPCInvWithLinqSettings>
             }
 
             // Build bindings in the same order as rules; disabled rules have null filters
-            _ruleBindings = newRules
-                .Select(rule => new RuleBinding(
-                    rule,
-                    rule.Enabled ? ItemFilter.LoadFromPath<CustomItemData>(Path.Combine(pickitConfigFileDirectory, rule.Location)) : null))
-                .ToList();
+            _ruleBindings = new List<RuleBinding>(newRules.Count);
+            foreach (var rule in newRules)
+            {
+                ItemFilter<CustomItemData> filter = null;
+                int? minP = null, minS = null;
+                if (rule.Enabled)
+                {
+                    var fullPath = Path.Combine(pickitConfigFileDirectory, rule.Location);
+                    var text = File.ReadAllText(fullPath);
+                    TryExtractOpenCounts(text, out var cleaned, out minP, out minS);
+                    filter = ItemFilter.LoadFromString<CustomItemData>(cleaned);
+                }
+                _ruleBindings.Add(new RuleBinding(rule, filter, minP, minS));
+            }
 
             Settings.NPCInvRules = newRules;
         }
@@ -560,7 +580,17 @@ public class NPCInvWithLinq : BaseSettingsPlugin<NPCInvWithLinqSettings>
 
     private bool ItemInFilter(CustomItemData item)
     {
-        return _ruleBindings?.Any(b => b.Rule.Enabled && b.Filter?.Matches(item) == true) ?? false;
+        if (_ruleBindings == null) return false;
+        foreach (var b in _ruleBindings)
+        {
+            if (!b.Rule.Enabled || b.Filter == null)
+                continue;
+            if (!ExtraOpenAffixConstraintsPass(item, b))
+                continue;
+            if (b.Filter.Matches(item))
+                return true;
+        }
+        return false;
     }
 
     private ColorNode GetFilterColor(CustomItemData item)
@@ -571,7 +601,11 @@ public class NPCInvWithLinq : BaseSettingsPlugin<NPCInvWithLinqSettings>
         // Top-to-bottom precedence: the first enabled rule that matches decides the color
         foreach (var binding in _ruleBindings)
         {
-            if (binding.Rule.Enabled && binding.Filter?.Matches(item) == true)
+            if (!binding.Rule.Enabled || binding.Filter == null)
+                continue;
+            if (!ExtraOpenAffixConstraintsPass(item, binding))
+                continue;
+            if (binding.Filter.Matches(item))
             {
                 return binding.Rule.Color;
             }
@@ -596,6 +630,8 @@ public class NPCInvWithLinq : BaseSettingsPlugin<NPCInvWithLinqSettings>
 
             foreach (var item in itemsList)
             {
+                if (!ExtraOpenAffixConstraintsPass(item, binding))
+                    continue;
                 if (binding.Filter.Matches(item))
                     return binding.Rule.Color;
             }
@@ -664,5 +700,197 @@ public class NPCInvWithLinq : BaseSettingsPlugin<NPCInvWithLinqSettings>
     private static T TryGetValue<T>(Func<T> getter) where T : struct
     {
         try { return getter(); } catch { return default; }
+    }
+
+    // ===== Open affix support =====
+    private static bool ExtraOpenAffixConstraintsPass(CustomItemData item, RuleBinding rule)
+    {
+        if (rule.MinOpenPrefixes is null && rule.MinOpenSuffixes is null)
+            return true;
+        if (rule.MinOpenPrefixes is int pReq && OpenPrefixCount(item) < pReq) return false;
+        if (rule.MinOpenSuffixes is int sReq && OpenSuffixCount(item) < sReq) return false;
+        return true;
+    }
+
+    private static readonly Regex OpenPrefixRegex = new Regex(@"OpenPrefixCount\s*\(\)\s*(==|>=|<=|>|<)\s*(\d+)", RegexOptions.Compiled | RegexOptions.CultureInvariant);
+    private static readonly Regex OpenSuffixRegex = new Regex(@"OpenSuffixCount\s*\(\)\s*(==|>=|<=|>|<)\s*(\d+)", RegexOptions.Compiled | RegexOptions.CultureInvariant);
+
+    private static void TryExtractOpenCounts(string expr, out string cleanedExpr, out int? minPrefixes, out int? minSuffixes)
+    {
+        int? localMinPrefixes = null;
+        int? localMinSuffixes = null;
+        var cleaned = expr ?? string.Empty;
+
+        cleaned = OpenPrefixRegex.Replace(cleaned, m =>
+        {
+            var op = m.Groups[1].Value;
+            var num = int.Parse(m.Groups[2].Value);
+            localMinPrefixes = MergeConstraint(localMinPrefixes, op, num);
+            return "true";
+        });
+        cleaned = OpenSuffixRegex.Replace(cleaned, m =>
+        {
+            var op = m.Groups[1].Value;
+            var num = int.Parse(m.Groups[2].Value);
+            localMinSuffixes = MergeConstraint(localMinSuffixes, op, num);
+            return "true";
+        });
+
+        cleanedExpr = cleaned;
+        minPrefixes = localMinPrefixes;
+        minSuffixes = localMinSuffixes;
+    }
+
+    private static int? MergeConstraint(int? existing, string op, int value)
+    {
+        int threshold = op switch
+        {
+            ">" => value + 1,
+            ">=" => value,
+            "==" => value,
+            "<" => int.MinValue,
+            "<=" => int.MinValue,
+            _ => value,
+        };
+        if (op == "==") return value;
+        if (existing is null) return threshold;
+        return Math.Max(existing.Value, threshold);
+    }
+
+    // Minimal port of open affix counting from ItemfilterExtension
+    private static int OpenPrefixCount(ItemData item)
+    {
+        var max = GetMaxPrefixes(item);
+        var used = GetPrefixCount(item);
+        var open = max - used;
+        return open > 0 ? open : 0;
+    }
+
+    private static int OpenSuffixCount(ItemData item)
+    {
+        var max = GetMaxSuffixes(item);
+        var used = GetSuffixCount(item);
+        var open = max - used;
+        return open > 0 ? open : 0;
+    }
+
+    private static Mods TryGetMods(ItemData item)
+    {
+        try { return item?.Entity?.GetComponent<Mods>(); } catch { return null; }
+    }
+
+    private static int GetPrefixCount(ItemData item)
+    {
+        var mods = TryGetMods(item);
+        if (mods == null) return 0;
+        if (TryGetIntProperty(mods, out var v, "PrefixesCount", "PrefixCount", "NumPrefixes")) return v;
+        return CountAffixesByKind(mods, wantPrefix: true);
+    }
+
+    private static int GetSuffixCount(ItemData item)
+    {
+        var mods = TryGetMods(item);
+        if (mods == null) return 0;
+        if (TryGetIntProperty(mods, out var v, "SuffixesCount", "SuffixCount", "NumSuffixes")) return v;
+        return CountAffixesByKind(mods, wantPrefix: false);
+    }
+
+    private static int GetMaxPrefixes(ItemData item)
+    {
+        var mods = TryGetMods(item);
+        if (mods == null) return 0;
+        if (TryGetIntProperty(mods, out var v, "PrefixesMax", "MaxPrefixes", "TotalAllowedPrefixes", "MaximumPrefixes")) return v;
+        return 3;
+    }
+
+    private static int GetMaxSuffixes(ItemData item)
+    {
+        var mods = TryGetMods(item);
+        if (mods == null) return 0;
+        if (TryGetIntProperty(mods, out var v, "SuffixesMax", "MaxSuffixes", "TotalAllowedSuffixes", "MaximumSuffixes")) return v;
+        return 3;
+    }
+
+    private static int CountAffixesByKind(Mods mods, bool wantPrefix)
+    {
+        try
+        {
+            var explicitMods = GetPropertyValue(mods, "ExplicitMods") as System.Collections.IEnumerable;
+            if (explicitMods == null) return 0;
+            int count = 0;
+            foreach (var m in explicitMods)
+            {
+                if (m == null) continue;
+                if (TryGetBoolProperty(m, out var isPrefix, "IsPrefix") && wantPrefix && isPrefix) { count++; continue; }
+                if (TryGetBoolProperty(m, out var isSuffix, "IsSuffix") && !wantPrefix && isSuffix) { count++; continue; }
+
+                var modRecord = GetPropertyValue(m, "ModRecord");
+                if (modRecord == null) continue;
+                var genType = GetPropertyValue(modRecord, "GenerationType");
+                if (genType != null)
+                {
+                    var text = genType.ToString()?.ToLowerInvariant() ?? string.Empty;
+                    if (wantPrefix && text.Contains("prefix")) { count++; continue; }
+                    if (!wantPrefix && text.Contains("suffix")) { count++; continue; }
+                }
+                if (TryGetIntProperty(modRecord, out var genId, "GenerationTypeId", "GenerationId", "GenType"))
+                {
+                    if (wantPrefix && genId == 1) count++;
+                    else if (!wantPrefix && genId == 2) count++;
+                }
+            }
+            return count;
+        }
+        catch { return 0; }
+    }
+
+    private static bool TryGetIntProperty(object source, out int value, params string[] names)
+    {
+        value = 0;
+        if (source == null) return false;
+        foreach (var name in names)
+        {
+            var prop = source.GetType().GetProperty(name, System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.IgnoreCase);
+            if (prop == null) continue;
+            try
+            {
+                var raw = prop.GetValue(source);
+                if (raw is int i) { value = i; return true; }
+                if (raw is long l) { value = unchecked((int)l); return true; }
+                if (raw is short s) { value = s; return true; }
+                if (raw is byte b) { value = b; return true; }
+                if (raw is Enum e) { value = Convert.ToInt32(e); return true; }
+            }
+            catch { }
+        }
+        return false;
+    }
+
+    private static bool TryGetBoolProperty(object source, out bool value, params string[] names)
+    {
+        value = false;
+        if (source == null) return false;
+        foreach (var name in names)
+        {
+            var prop = source.GetType().GetProperty(name, System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.IgnoreCase);
+            if (prop == null) continue;
+            try
+            {
+                var raw = prop.GetValue(source);
+                if (raw is bool b) { value = b; return true; }
+            }
+            catch { }
+        }
+        return false;
+    }
+
+    private static object GetPropertyValue(object source, string name)
+    {
+        try
+        {
+            var prop = source.GetType().GetProperty(name, System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.IgnoreCase);
+            return prop?.GetValue(source);
+        }
+        catch { return null; }
     }
 }
