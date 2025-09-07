@@ -46,6 +46,7 @@ public class NPCInvWithLinqSettings : ISettings
     [Menu("Use a Custom \"\\config\\custom_folder\" folder ")]
     public TextNode CustomConfigDir { get; set; } = new TextNode();
 
+    [IgnoreMenu]
     public List<NPCInvRule> NPCInvRules { get; set; } = new List<NPCInvRule>();
 
     [JsonIgnore]
