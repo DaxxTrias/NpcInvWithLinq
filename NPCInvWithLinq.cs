@@ -290,7 +290,8 @@ public class NPCInvWithLinq : BaseSettingsPlugin<NPCInvWithLinqSettings>
             unSeenItems.Add($"Tab [{storedTab.Title}]");
             if (Settings.DrawOnTabLabels)
             {
-                DrawTabNameElementFrame(storedTab.TabNameElement, hoveredItem);
+                var tabColor = GetFilterColorForTab(storedTab.ServerItems);
+                DrawTabNameElementFrame(storedTab.TabNameElement, hoveredItem, tabColor);
             }
         }
     }
@@ -323,7 +324,7 @@ public class NPCInvWithLinq : BaseSettingsPlugin<NPCInvWithLinqSettings>
         Graphics.DrawFrame(rect, frameColor, Settings.FrameThickness);
     }
 
-    private void DrawTabNameElementFrame(Element tabNameElement, Element hoveredItem)
+    private void DrawTabNameElementFrame(Element tabNameElement, Element hoveredItem, ColorNode? frameColorOverride = null)
     {
         // Validate element and its rectangle before drawing to prevent label-jumping and invalid draws
         if (tabNameElement == null)
@@ -342,7 +343,7 @@ public class NPCInvWithLinq : BaseSettingsPlugin<NPCInvWithLinqSettings>
         if (rect.Width <= 1 || rect.Height <= 1)
             return;
 
-        var frameColor = Settings.DefaultFrameColor;
+        var frameColor = frameColorOverride ?? Settings.DefaultFrameColor;
 
         bool intersectsHovered = false;
         if (hoveredItem != null)
@@ -575,6 +576,31 @@ public class NPCInvWithLinq : BaseSettingsPlugin<NPCInvWithLinqSettings>
                 return binding.Rule.Color;
             }
         }
+        return Settings.DefaultFrameColor;
+    }
+
+    private ColorNode GetFilterColorForTab(IEnumerable<CustomItemData> items)
+    {
+        if (_ruleBindings == null || _ruleBindings.Count == 0)
+            return Settings.DefaultFrameColor;
+
+        var itemsList = items?.Where(i => i != null).ToList();
+        if (itemsList == null || itemsList.Count == 0)
+            return Settings.DefaultFrameColor;
+
+        // Follow rule precedence: first enabled rule that matches any item determines tab color
+        foreach (var binding in _ruleBindings)
+        {
+            if (!binding.Rule.Enabled || binding.Filter == null)
+                continue;
+
+            foreach (var item in itemsList)
+            {
+                if (binding.Filter.Matches(item))
+                    return binding.Rule.Color;
+            }
+        }
+
         return Settings.DefaultFrameColor;
     }
 
