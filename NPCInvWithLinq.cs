@@ -18,6 +18,7 @@ using System.Diagnostics;
 using System.Windows.Forms;
 using System.Text.RegularExpressions;
 using ExileCore2.PoEMemory.Components;
+using ExileCore2.PoEMemory.Elements.InventoryElements; // Haggle window inventory parsing
 
 namespace NPCInvWithLinq;
 
@@ -119,6 +120,7 @@ public class NPCInvWithLinq : BaseSettingsPlugin<NPCInvWithLinqSettings>
         ProcessPurchaseWindow(hoveredItem);
         ProcessRewardsWindow(hoveredItem);
         ProcessRitualWindow(hoveredItem);
+        ProcessHaggleWindow(hoveredItem); // Expedition vendor (Tujen) support
     }
 
     private void ProcessRewardsWindow(Element hoveredItem)
@@ -497,7 +499,9 @@ public class NPCInvWithLinq : BaseSettingsPlugin<NPCInvWithLinqSettings>
         var purchaseWindowItems = GetVisiblePurchaseWindow();
 
         if (purchaseWindowItems == null || purchaseWindowItems.TabContainer?.Inventories == null)
+        {
             return [];
+        }
 
         return purchaseWindowItems.TabContainer.Inventories.Select((inventory, i) =>
         {
@@ -700,6 +704,105 @@ public class NPCInvWithLinq : BaseSettingsPlugin<NPCInvWithLinqSettings>
     private static T TryGetValue<T>(Func<T> getter) where T : struct
     {
         try { return getter(); } catch { return default; }
+    }
+
+    // ===== Expedition Haggle (vendor) support =====
+    private void ProcessHaggleWindow(Element hoveredItem)
+    {
+        var haggle = GameController?.Game?.IngameState?.IngameUi?.HaggleWindow;
+        if (haggle == null || !haggle.IsVisible) return;
+
+        var (visibleItems, label) = GetHaggleVisibleItemsWithLabel(haggle);
+        if (visibleItems.Count == 0) return;
+
+        // Select next-to-purchase similar to purchase window (single pseudo-tab)
+        const string tabKey = "__haggle__";
+        var filtered = visibleItems.Where(ItemInFilter).ToList();
+        CustomItemData nextToPurchase = null;
+        if (Settings.AutoPurchase)
+        {
+            if (!_purchasesPerTab.TryGetValue(tabKey, out var purchaseCount))
+                purchaseCount = 0;
+            if (Settings.MaxPurchasesPerTab == 0 || purchaseCount < Settings.MaxPurchasesPerTab)
+                nextToPurchase = filtered.FirstOrDefault();
+        }
+
+        foreach (var item in filtered)
+        {
+            DrawItemFrame(item, hoveredItem, item == nextToPurchase);
+        }
+
+        if (Settings.AutoPurchase && _sinceLastPurchase.ElapsedMilliseconds >= Settings.PurchaseDelay && nextToPurchase != null)
+        {
+            if (!_purchasesPerTab.TryGetValue(tabKey, out var purchaseCount)) purchaseCount = 0;
+            AutoPurchaseItem(nextToPurchase);
+            _purchasesPerTab[tabKey] = purchaseCount + 1;
+        }
+    }
+
+    private (List<CustomItemData> Items, Element Label) GetHaggleVisibleItemsWithLabel(Element haggleRoot)
+    {
+        var items = new List<CustomItemData>();
+        Element label = null;
+        try { label = haggleRoot.GetChildFromIndices(6, 2, 0); } catch { }
+
+        var grid = TryFindHaggleInventoryGrid(haggleRoot);
+        if (grid == null) return (items, label);
+
+        List<NormalInventoryItem> uiItems;
+        try { uiItems = grid.GetChildrenAs<NormalInventoryItem>()?.Skip(1).ToList() ?? new List<NormalInventoryItem>(); }
+        catch { uiItems = new List<NormalInventoryItem>(); }
+
+        foreach (var x in uiItems)
+        {
+            try
+            {
+                if (x?.Item is { Address: not 0, IsValid: true })
+                {
+                    items.Add(new CustomItemData(x.Item, GameController, EKind.Shop, x.GetClientRectCache));
+                }
+            }
+            catch { }
+        }
+
+        return (items, label);
+    }
+
+    private static Element TryFindHaggleInventoryGrid(Element root)
+    {
+        // Fast path: known child indices used in other plugins
+        try
+        {
+            var direct = root.GetChildFromIndices(8, 1, 0, 0);
+            if (direct != null && direct.Address != 0) return direct;
+        }
+        catch { }
+
+        // Fallback: BFS to find the first element that yields NormalInventoryItem children
+        var q = new Queue<Element>();
+        q.Enqueue(root);
+        while (q.Count > 0)
+        {
+            var e = q.Dequeue();
+            try
+            {
+                var uiItems = e.GetChildrenAs<NormalInventoryItem>();
+                if (uiItems != null && uiItems.Count > 0) return e;
+            }
+            catch { }
+
+            try
+            {
+                var children = e.Children;
+                if (children != null)
+                {
+                    foreach (var c in children)
+                        if (c != null) q.Enqueue(c);
+                }
+            }
+            catch { }
+        }
+        return null;
     }
 
     // ===== Open affix support =====
