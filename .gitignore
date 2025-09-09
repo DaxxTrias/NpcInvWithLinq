@@ -262,6 +262,12 @@ paket-files/
 # Python Tools for Visual Studio (PTVS)
 __pycache__/
 *.pyc
+
+# Cursor
+.cursorrules
+.cursor/*
+
+# ExileHud related files
 config.ini
 config.ini
 config.ini
@@ -389,6 +395,3 @@ System.Runtime.Handles.dll
 System.Runtime.Extensions.dll
 System.Runtime.CompilerServices.VisualC.dll
 Errors.txt
-.github
-.cursorrules
-.cursor/*
