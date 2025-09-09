@@ -9,6 +9,7 @@ using System.Text.Json.Serialization;
 using ImGuiNET;
 using System.Numerics;
 using System.Windows.Forms;
+using System;
 
 namespace NPCInvWithLinq;
 
@@ -31,13 +32,17 @@ public class NPCInvWithLinqSettings : ISettings
     [Menu("Max Purchases Per Tab", "Maximum number of items to auto-purchase from each tab (0 = unlimited)")]
     public RangeNode<int> MaxPurchasesPerTab { get; set; } = new RangeNode<int>(5, 0, 50);
     [Menu("Auto Purchase Toggle Key", "Hotkey to toggle auto-purchase on/off")]
-    public HotkeyNode AutoPurchaseToggleKey { get; set; } = new HotkeyNode(Keys.F5);
+    public HotkeyNodeV2 AutoPurchaseToggleKey { get; set; } = new HotkeyNodeV2(Keys.F5);
     public ColorNode DefaultFrameColor { get; set; } = new ColorNode(Color.Red);
     [Menu("Auto Purchase Color", "Color for the next item to be auto-purchased")]
     public ColorNode AutoPurchaseColor { get; set; } = new ColorNode(Color.Lime);
+    [Menu("Frame Thickness", "Outline thickness in pixels for item frames")]
     public RangeNode<int> FrameThickness { get; set; } = new RangeNode<int>(1, 1, 20);
+    // [Menu("Enable Debug Logging", "Enable detailed logging to help diagnose issues")]
+    // public ToggleNode EnableDebugLogging { get; set; } = new ToggleNode(false);
 
     [JsonIgnore]
+    [Menu("Filter Test", "Type an example item name to test rule matching (not saved)")]
     public TextNode FilterTest { get; set; } = new TextNode();
 
     [JsonIgnore]
@@ -68,7 +73,7 @@ public class NPCInvWithLinqSettings : ISettings
             {
                 var configDir = plugin.ConfigDirectory;
                 var customConfigFileDirectory = !string.IsNullOrEmpty(_parent.CustomConfigDir)
-                    ? Path.Combine(Path.GetDirectoryName(plugin.ConfigDirectory), _parent.CustomConfigDir)
+                    ? Path.Combine(plugin.ConfigDirectory ?? AppDomain.CurrentDomain.BaseDirectory, _parent.CustomConfigDir)
                     : null;
 
                 var directoryToOpen = Directory.Exists(customConfigFileDirectory)
