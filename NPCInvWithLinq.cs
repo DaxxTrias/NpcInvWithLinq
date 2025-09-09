@@ -1322,7 +1322,7 @@ public class NPCInvWithLinq : BaseSettingsPlugin<NPCInvWithLinqSettings>
 			if (line.Length == 0) continue;
 			if (firstWritten)
 			{
-				bool startsWithOp = line.StartsWith("&&") || line.StartsWith("||") || line.StartsWith(")") || line.StartsWith("]") || line.StartsWith(",");
+				bool startsWithOp = line.StartsWith("&&") || line.StartsWith("||") || line.StartsWith(")") || line.StartsWith("]") || line.StartsWith(",") || line.StartsWith("}") || line.StartsWith(".");
 				char last = sb.Length > 0 ? sb[sb.Length - 1] : '\0';
 				bool prevOpener = last == '(' || last == '{' || last == '[' || last == ',' || last == '&' || last == '|';
 				if (!startsWithOp && !prevOpener) sb.Append(" || "); else sb.Append(' ');
