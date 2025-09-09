@@ -45,7 +45,7 @@ public class ServerAndStashWindow
 	}
 }
 
-public class NPCInvWithLinq : BaseSettingsPlugin<NPCInvWithLinqSettings>
+public partial class NPCInvWithLinq : BaseSettingsPlugin<NPCInvWithLinqSettings>
 {
 	private readonly CachedValue<List<WindowSet>> _storedStashAndWindows;
 	private readonly CachedValue<List<CustomItemData>> _rewardItems;
@@ -1039,7 +1039,10 @@ public class NPCInvWithLinq : BaseSettingsPlugin<NPCInvWithLinqSettings>
 		try { return getter(); } catch { return default; }
 	}
 
+
+#if false
 	// ===== Expedition Haggle (vendor) support =====
+
 	private void ProcessHaggleWindow(Element? hoveredItem)
 	{
 		var haggle = GameController?.Game?.IngameState?.IngameUi?.HaggleWindow;
@@ -1251,6 +1254,7 @@ public class NPCInvWithLinq : BaseSettingsPlugin<NPCInvWithLinqSettings>
 		}
 		return null;
 	}
+#endif
 	
 	// ===== Open affix support =====
 	private static bool ExtraOpenAffixConstraintsPass(CustomItemData item, RuleBinding rule)
