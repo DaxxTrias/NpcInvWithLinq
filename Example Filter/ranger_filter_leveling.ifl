@@ -1,0 +1,208 @@
+
+// Daxx LA Ranger Mapping filter
+
+// Boots
+//==============================================
+(
+  HasTag("Boot") &&
+  (
+    PlayerInfo.Level >= 35  && // Mapping
+    (
+      new [] {
+        ItemStats[GameStat.BaseMaximumLife] >= 100,
+        ItemStats[GameStat.BaseFireDamageResistancePct] >= 20,
+        ItemStats[GameStat.BaseColdDamageResistancePct] >= 20,
+        ItemStats[GameStat.BaseLightningDamageResistancePct] >= 20,
+        ItemStats[GameStat.BaseChaosDamageResistancePct] >= 10,
+        ItemStats[GameStat.BaseResistAllElementsPct] >= 10,
+        ItemStats[GameStat.BaseMovementVelocityPct] >= 10,
+      }.Count(x => x) >= 2
+    )
+  )
+)
+
+
+// Rings
+//==============================================
+(
+  HasTag("Ring") &&
+  (
+    PlayerInfo.Level >= 35  && // Mapping
+    (
+      new [] {
+        ItemStats[GameStat.BaseMaximumLife] >= 100,
+        ItemStats[GameStat.BaseFireDamageResistancePct] >= 20,
+        ItemStats[GameStat.BaseColdDamageResistancePct] >= 20,
+        ItemStats[GameStat.BaseLightningDamageResistancePct] >= 20,
+        ItemStats[GameStat.BaseChaosDamageResistancePct] >= 10,
+        ItemStats[GameStat.BaseResistAllElementsPct] >= 10,
+        ItemStats[GameStat.BaseItemFoundRarityPct] >= 7,
+        ItemStats[GameStat.AttackMinimumAddedPhysicalDamage] >= 4,
+        ItemStats[GameStat.AttackMinimumAddedColdDamage] >= 6,
+        ItemStats[GameStat.AttackMinimumAddedFireDamage] >= 5,
+        ItemStats[GameStat.AttackMinimumAddedLightningDamage] >= 1,
+      }.Count(x => x) >= 2
+    )
+  )
+)
+
+// Belt
+//==============================================
+(
+  HasTag("Belt") &&
+  (
+    PlayerInfo.Level >= 35  && // Mapping
+    (
+      new [] {
+        ItemStats[GameStat.BaseMaximumLife] >= 70,
+        ItemStats[GameStat.BaseFireDamageResistancePct] >= 20,
+        ItemStats[GameStat.BaseColdDamageResistancePct] >= 20,
+        ItemStats[GameStat.BaseLightningDamageResistancePct] >= 20,
+        ItemStats[GameStat.BaseChaosDamageResistancePct] >= 10,
+        ItemStats[GameStat.BaseResistAllElementsPct] >= 10,
+        ItemStats[GameStat.BaseItemFoundRarityPct] >= 7,
+        ItemStats[GameStat.LocalCharmSlots] >= 1,
+      }.Count(x => x) >= 2
+    )
+  )
+)
+
+// Amulets
+//==============================================
+(
+  HasTag("Amulet") &&
+  (
+    PlayerInfo.Level >= 35  && // Mapping
+    (
+      new [] {
+        ItemStats[GameStat.BaseMaximumLife] >= 100,
+        ItemStats[GameStat.BaseFireDamageResistancePct] >= 20,
+        ItemStats[GameStat.BaseColdDamageResistancePct] >= 20,
+        ItemStats[GameStat.BaseLightningDamageResistancePct] >= 20,
+        ItemStats[GameStat.BaseChaosDamageResistancePct] >= 10,
+        ItemStats[GameStat.BaseResistAllElementsPct] >= 10,
+        ItemStats[GameStat.BaseItemFoundRarityPct] >= 7,
+        ItemStats[GameStat.BaseSpiritFromEquipment] >= 7,
+        ItemStats[GameStat.CriticalStrikeChancePct] >= 15,
+      }.Count(x => x) >= 2
+    )
+  )
+)
+
+// Gloves
+//==============================================
+(
+  HasTag("Glove") &&
+  (
+    PlayerInfo.Level >= 35  && // Mapping
+    (
+      new [] {
+        ItemStats[GameStat.BaseMaximumLife] >= 100,
+        ItemStats[GameStat.BaseFireDamageResistancePct] >= 20,
+        ItemStats[GameStat.BaseColdDamageResistancePct] >= 20,
+        ItemStats[GameStat.BaseLightningDamageResistancePct] >= 20,
+        ItemStats[GameStat.BaseChaosDamageResistancePct] >= 10,
+        ItemStats[GameStat.BaseResistAllElementsPct] >= 10,
+        ItemStats[GameStat.BaseItemFoundRarityPct] >= 7,
+        ItemStats[GameStat.AttackMinimumAddedPhysicalDamage] >= 4,
+        ItemStats[GameStat.AttackMinimumAddedColdDamage] >= 6,
+        ItemStats[GameStat.AttackMinimumAddedFireDamage] >= 5,
+        ItemStats[GameStat.AttackMinimumAddedLightningDamage] >= 1,
+      }.Count(x => x) >= 2
+    )
+  )
+)
+
+// Helmets
+//==============================================
+(
+  HasTag("Helm") &&
+  (
+    PlayerInfo.Level >= 35  && // Mapping
+    (
+      new [] {
+        ItemStats[GameStat.BaseMaximumLife] >= 100,
+        ItemStats[GameStat.BaseFireDamageResistancePct] >= 20,
+        ItemStats[GameStat.BaseColdDamageResistancePct] >= 20,
+        ItemStats[GameStat.BaseLightningDamageResistancePct] >= 20,
+        ItemStats[GameStat.BaseChaosDamageResistancePct] >= 10,
+        ItemStats[GameStat.BaseResistAllElementsPct] >= 10,
+        ItemStats[GameStat.BaseItemFoundRarityPct] >= 1,
+        ItemStats[GameStat.BaseSpiritFromEquipment] >= 1,
+      }.Count(x => x) >= 2
+    )
+  )
+)
+
+// Quivers
+//==============================================
+(
+  HasTag("Quiver") &&
+  (
+    PlayerInfo.Level >= 35  && // Mapping
+    (
+      new [] {
+        ItemStats[GameStat.BaseMaximumLife] >= 100,
+        ItemStats[GameStat.BaseFireDamageResistancePct] >= 20,
+        ItemStats[GameStat.BaseColdDamageResistancePct] >= 20,
+        ItemStats[GameStat.BaseLightningDamageResistancePct] >= 20,
+        ItemStats[GameStat.BaseChaosDamageResistancePct] >= 10,
+        ItemStats[GameStat.BaseResistAllElementsPct] >= 10,
+        ItemStats[GameStat.BaseItemFoundRarityPct] >= 1,
+        ItemStats[GameStat.AttackMinimumAddedColdDamage] >= 17,
+        ItemStats[GameStat.AttackMinimumAddedLightningDamage] >= 1,
+        ItemStats[GameStat.AttackMinimumAddedFireDamage] >= 11,
+        ItemStats[GameStat.AttackMinimumAddedPhysicalDamage] >= 5,
+        ItemStats[GameStat.BaseProjectileSpeedPct] >= 39,
+        ItemStats[GameStat.AttackSpeedPct]>=11,
+        ItemStats[GameStat.DamagePctWithBowSkills]>=15,
+        ItemStats[GameStat.LocalPhysicalDamagePct]>=135,
+        ItemStats[GameStat.BaseChanceToPiercePct]>=18,
+        //ItemStats[GameStat.AttackCriticalStrikeChancePct]>=25,
+        //ItemStats[GameStat.AttackCriticalStrikeMultiplier]>=10,
+      }.Count(x => x) >= 2
+    )
+  )
+)
+
+// Body Armour
+//==============================================
+(
+  HasTag("Body_Armour") &&
+  (
+    PlayerInfo.Level >= 35  && // Mapping
+    (
+      new [] {
+        ItemStats[GameStat.BaseMaximumLife] >= 100,
+        ItemStats[GameStat.BaseFireDamageResistancePct] >= 20,
+        ItemStats[GameStat.BaseColdDamageResistancePct] >= 20,
+        ItemStats[GameStat.BaseLightningDamageResistancePct] >= 20,
+        ItemStats[GameStat.BaseChaosDamageResistancePct] >= 10,
+        ItemStats[GameStat.BaseResistAllElementsPct] >= 10,
+        ItemStats[GameStat.BaseSpiritFromEquipment] >= 1,
+      }.Count(x => x) >= 2
+    )
+  )
+)
+
+// Bows
+//==============================================
+(
+  HasTag("Bow") &&
+  (
+    PlayerInfo.Level >= 35  && // Mapping
+    (
+      new [] {
+        ItemStats[GameStat.LocalMinimumAddedColdDamage] >= 17,
+        ItemStats[GameStat.LocalMinimumAddedLightningDamage] >= 1,
+        ItemStats[GameStat.LocalMinimumAddedFireDamage] >= 37,
+        ItemStats[GameStat.LocalMinimumAddedPhysicalDamage] >= 5,
+        ItemStats[GameStat.AttackSpeedPct]>=15,
+        ItemStats[GameStat.DamagePctWithBowSkills]>=15,
+        ItemStats[GameStat.LocalPhysicalDamagePct]>=120,
+        ItemStats[GameStat.ProjectileSkillGemLevel]>=2,
+        ItemStats[GameStat.LocalCriticalStrikeChance]>=200,
+      }.Count(x => x) >= 2
+    ) 
+  )
+)

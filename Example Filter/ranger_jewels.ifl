@@ -1,0 +1,23 @@
+// Jewel Filters
+
+// Jewel
+//==============================================
+(
+  HasTag("Jewel") &&
+  (
+    PlayerInfo.Level >= 65  && // Mapping
+    (
+      new [] {
+        ItemStats[GameStat.ProjectileDamagePct] >= 1,
+        ItemStats[GameStat.LightningDamagePct] >= 1,
+        ItemStats[GameStat.AttackDamagePctVsRareOrUniqueEnemy] >= 1,
+        ItemStats[GameStat.ElementalDamagePct] >= 1,
+        ItemStats[GameStat.AttackSpeedPct] >= 1,
+        ItemStats[GameStat.BowAttackSpeedPct] >= 1,
+        ItemStats[GameStat.DamagePctWithBowSkills] >= 1,
+        ItemStats[GameStat.QuiverModEffectPct] >= 1,
+        ItemStats[GameStat.ProjectileSpeedPct] >= 1,
+      }.Count(x => x) >= 1
+    )
+  )
+)

@@ -1,0 +1,27 @@
+// Ranger Bow Filters
+
+BaseName == "Advanced Dualstring Bow"
+&& (ItemStats[GameStat.LocalPhysicalDamagePct] >= 135
+|| ItemStats[GameStat.AttackMinimumAddedFireDamage] >= 26
+|| ItemStats[GameStat.AttackMinimumAddedColdDamage] >= 16
+|| ItemStats[GameStat.ElementalDamageWithAttackSkillsPct] >= 87
+//|| ItemStats[GameStat.NumberOfAdditionalProjectiles] >= 1
+|| ItemStats[GameStat.AttackSpeedPct] >= 10
+|| ItemStats[GameStat.BowAttackSpeedPct] >= 10
+|| ItemStats[GameStat.BowSkillGemLevel] >= 3
+|| ItemStats[GameStat.ProjectileSkillGemLevel] >=3
+|| ItemStats[GameStat.DamagePctWithBowSkills] >= 15
+|| ItemStats[GameStat.ProjectileSpeedPct] >= 15)
+
+BaseName == "Expert Dualstring Bow"
+&& (ItemStats[GameStat.LocalPhysicalDamagePct] >= 135
+|| ItemStats[GameStat.AttackMinimumAddedFireDamage] >= 26
+|| ItemStats[GameStat.AttackMinimumAddedColdDamage] >= 16
+|| ItemStats[GameStat.ElementalDamageWithAttackSkillsPct] >= 87
+//|| ItemStats[GameStat.NumberOfAdditionalProjectiles] >= 1
+|| ItemStats[GameStat.AttackSpeedPct] >= 10
+|| ItemStats[GameStat.BowAttackSpeedPct] >= 10
+|| ItemStats[GameStat.BowSkillGemLevel] >= 3
+|| ItemStats[GameStat.ProjectileSkillGemLevel] >=3
+|| ItemStats[GameStat.DamagePctWithBowSkills] >= 15
+|| ItemStats[GameStat.ProjectileSpeedPct] >= 15)

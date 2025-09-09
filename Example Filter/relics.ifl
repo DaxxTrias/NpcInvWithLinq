@@ -1,0 +1,14 @@
+// Good Relic Filters
+//==============================================
+(
+  HasTag("relic") &
+  (
+    PlayerInfo.Level >= 65  && // Mapping
+    (
+      new [] {
+        ItemStats[GameStat.MapSanctumKeyDropChancePct] >= 1,
+        ItemStats[GameStat.SanctumHonourResistancePct] >= 1,
+      }.Count(x => x) >= 1
+    )
+  )
+)

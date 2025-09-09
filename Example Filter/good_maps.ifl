@@ -1,0 +1,48 @@
+// Map Filters
+//==============================================
+(
+  HasTag("Map") &&
+  (
+    PlayerInfo.Level >= 65  && // Mapping
+    (
+      new [] {
+        ItemStats[GameStat.MapExperienceGainPct] >= 15,
+        ItemStats[GameStat.MapItemDropQuantityPct] >= 10,
+        ItemStats[GameStat.MapItemDropRarityPct] >= 15,
+        ItemStats[GameStat.MapMonstersArmourBreakPhysicalDamagePctDealtAsArmourBreak] >= 1,
+        ItemStats[GameStat.MapGoldPct] >= 5,
+      }.Count(x => x) >= 1
+    )
+  )
+)
+
+// Tablet Filters
+//==============================================
+(
+  HasTag("tower_augment") &&
+  (
+    PlayerInfo.Level >= 65  && // Mapping
+    (
+      new [] {
+        ItemStats[GameStat.MapBossExperiencePctFinal] >= 20,
+        ItemStats[GameStat.MapExperienceGainPct] >= 5,
+      }.Count(x => x) >= 1
+    )
+  )
+)
+
+//BaseName.Contains("Waystone")
+//&& (ItemStats[GameStat.MapMonstersDamagePct] >= 1
+//|| ItemStats[GameStat.MapMonstersAttackSpeedPct] >= 1
+//|| ItemStats[GameStat.MapMonstersAdditionalNumberOfProjecitles] >= 1
+//|| ItemStats[GameStat.MapMonsterSkillsChainXAdditionalTimes] >= 1
+//|| ItemStats[GameStat.MapMonstersPoisonOnHit] >= 1
+//|| ItemStats[GameStat.MapMonstersCriticalStrikeChancePct] >= 1
+//|| ItemStats[GameStat.MapMonstersPenetrateElementalResistancesPct] >= 1
+//|| ItemStats[GameStat.MapMonstersAccuracyRatingPct] >= 1
+//|| ItemStats[GameStat.MapPlayerHasLevelXTemporalChains] >= 1
+//|| ItemStats[GameStat.MapPlayerHasLevelXElementalWeakness] >= 1
+//|| ItemStats[GameStat.MapPlayerHasLevelXEnfeeble] >= 1
+//|| ItemStats[GameStat.MapPlayerHasLevelXVulnerability] >= 1
+//|| ItemStats[GameStat.MapMonstersPctAllDamageToGainAsChaos] >= 1
+//|| ItemStats[GameStat.MapGroundLightning]>=1)

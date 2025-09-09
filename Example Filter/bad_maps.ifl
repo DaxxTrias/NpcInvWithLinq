@@ -1,0 +1,42 @@
+// Bad Map Filters
+//==============================================
+(
+  HasTag("Map") &&
+  (
+    PlayerInfo.Level >= 65  && // Mapping
+    (
+      new [] {
+        ItemStats[GameStat.MapMonstersDamagePct] >= 1,
+        ItemStats[GameStat.MapMonstersAttackSpeedPct] >= 1,
+				ItemStats[GameStat.MapMonstersAdditionalNumberOfProjecitles] >= 1,
+				ItemStats[GameStat.MapMonsterSkillsChainXAdditionalTimes] >= 1,
+				ItemStats[GameStat.MapMonstersPoisonOnHit] >= 1,
+				ItemStats[GameStat.MapMonstersCriticalStrikeChancePct] >= 1,
+				ItemStats[GameStat.MapMonstersPenetrateElementalResistancesPct] >= 1,
+				ItemStats[GameStat.MapMonstersAccuracyRatingPct] >= 1,
+				ItemStats[GameStat.MapPlayerHasLevelXTemporalChains] >= 1,
+				ItemStats[GameStat.MapPlayerHasLevelXElementalWeakness] >= 1,
+				ItemStats[GameStat.MapPlayerHasLevelXEnfeeble] >= 1,
+				ItemStats[GameStat.MapPlayerHasLevelXVulnerability] >= 1,
+				ItemStats[GameStat.MapMonstersPctAllDamageToGainAsChaos] >= 1,
+				ItemStats[GameStat.MapGroundLightning]>=1,
+      }.Count(x => x) >= 1
+    )
+  )
+)
+
+//BaseName.Contains("Waystone")
+//&& (ItemStats[GameStat.MapMonstersDamagePct] >= 1
+//|| ItemStats[GameStat.MapMonstersAttackSpeedPct] >= 1
+//|| ItemStats[GameStat.MapMonstersAdditionalNumberOfProjecitles] >= 1
+//|| ItemStats[GameStat.MapMonsterSkillsChainXAdditionalTimes] >= 1
+//|| ItemStats[GameStat.MapMonstersPoisonOnHit] >= 1
+//|| ItemStats[GameStat.MapMonstersCriticalStrikeChancePct] >= 1
+//|| ItemStats[GameStat.MapMonstersPenetrateElementalResistancesPct] >= 1
+//|| ItemStats[GameStat.MapMonstersAccuracyRatingPct] >= 1
+//|| ItemStats[GameStat.MapPlayerHasLevelXTemporalChains] >= 1
+//|| ItemStats[GameStat.MapPlayerHasLevelXElementalWeakness] >= 1
+//|| ItemStats[GameStat.MapPlayerHasLevelXEnfeeble] >= 1
+//|| ItemStats[GameStat.MapPlayerHasLevelXVulnerability] >= 1
+//|| ItemStats[GameStat.MapMonstersPctAllDamageToGainAsChaos] >= 1
+//|| ItemStats[GameStat.MapGroundLightning]>=1)
