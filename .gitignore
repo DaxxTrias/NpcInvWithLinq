@@ -391,3 +391,4 @@ System.Runtime.CompilerServices.VisualC.dll
 Errors.txt
 .github
 .cursorrules
+.cursor/*
