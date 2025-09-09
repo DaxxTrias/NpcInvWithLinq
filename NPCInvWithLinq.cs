@@ -649,7 +649,8 @@ public class NPCInvWithLinq : BaseSettingsPlugin<NPCInvWithLinqSettings>
 			var expr = Settings.FilterTest;
 			TryExtractOpenCounts(NormalizeExpression(StripComments(expr)), out var cleaned, out var minPref, out var minSuff);
 			var filter = ItemFilter.LoadFromString<CustomItemData>(cleaned);
-			var item = new CustomItemData(hoveredItem.Entity, GameController, EKind.Shop);
+			var tabIdx = _lastSelectedTabIndex >= 0 ? _lastSelectedTabIndex : 0;
+			var item = new CustomItemData(hoveredItem.Entity, GameController, EKind.Shop, default, tabIdx);
 			var openOk = (minPref is null || OpenPrefixCount(item) >= minPref)
 						 && (minSuff is null || OpenSuffixCount(item) >= minSuff);
 			var matched = openOk && filter.Matches(item);
