@@ -134,10 +134,154 @@ public partial class NPCInvWithLinq : BaseSettingsPlugin<NPCInvWithLinqSettings>
 		_frameCounter++;
 		var hoveredItem = GetHoveredItem();
 		PerformItemFilterTest(hoveredItem);
+		ProcessOfflineMerchantPanel(hoveredItem);
 		ProcessPurchaseWindow(hoveredItem);
 		ProcessRewardsWindow(hoveredItem);
 		ProcessRitualWindow(hoveredItem);
 		ProcessHaggleWindow(hoveredItem); // Expedition vendor (Tujen) support
+	}
+
+	private void ProcessOfflineMerchantPanel(Element? hoveredItem)
+	{
+		try
+		{
+			var ui = GameController?.IngameState?.IngameUi;
+			if (ui == null) return;
+			var panel = GetPropertyValue(ui, "OfflineMerchantPanel") as Element;
+			if (panel == null || !panel.IsValid || !panel.IsVisible) return;
+
+			var items = new List<CustomItemData>();
+			CollectItemsFromPanel(panel, items);
+			if (items.Count == 0) return;
+
+			var filtered = items.Where(ItemInFilter).ToList();
+			if (filtered.Count == 0) return;
+
+			foreach (var item in filtered)
+			{
+				DrawItemFrame(item, hoveredItem);
+			}
+		}
+		catch { }
+	}
+
+	private void CollectItemsFromPanel(Element panel, List<CustomItemData> items)
+	{
+		if (panel == null || panel.Address == 0) return;
+		try
+		{
+			// Direct inventory property
+			if (GetPropertyValue(panel, "Inventory") is ServerInventory serverInventory && serverInventory?.Items != null)
+			{
+				foreach (var ent in serverInventory.Items)
+				{
+					if (ent == null || ent.Address == 0) continue;
+					var safe = TryGetRef(() => new CustomItemData(ent, GameController, EKind.Shop, default, -1));
+					if (safe != null) items.Add(safe);
+				}
+			}
+		}
+		catch { }
+
+		// UI inventories/visible items
+		var candidates = new List<object?>
+		{
+			panel,
+			GetPropertyValue(panel, "InventoryPanel"),
+			GetPropertyValue(panel, "VisibleStash"),
+		};
+
+		foreach (var candidate in candidates)
+		{
+			if (candidate == null) continue;
+			try
+			{
+				if (candidate is ExileCore2.PoEMemory.MemoryObjects.Inventory moInv)
+				{
+					var vis = TryGetRef(() => moInv.VisibleInventoryItems as IList<NormalInventoryItem>);
+					if (vis != null)
+					{
+						foreach (var slot in vis)
+						{
+							try
+							{
+								if (slot?.Item == null || slot.Item.Address == 0) continue;
+								var safe = TryGetRef(() => new CustomItemData(slot.Item, GameController, EKind.Shop, slot.GetClientRectCache, -1));
+								if (safe != null) items.Add(safe);
+							}
+							catch { }
+						}
+					}
+				}
+				else if (candidate is Element el)
+				{
+					CollectNormalInventoryItemsFromDescendants(el, items, 6, 4096);
+				}
+			}
+			catch { }
+		}
+	}
+
+	private void CollectNormalInventoryItemsFromDescendants(Element root, List<CustomItemData> items, int maxDepth = 6, int maxNodes = 4096)
+	{
+		if (root == null || root.Address == 0) return;
+		try
+		{
+			var stack = new Stack<(Element el, int depth)>();
+			stack.Push((root, 0));
+			int visited = 0;
+			while (stack.Count > 0 && visited < maxNodes)
+			{
+				var (el, depth) = stack.Pop();
+				visited++;
+				if (el == null || el.Address == 0 || !el.IsVisible) continue;
+
+				var nii = el as NormalInventoryItem;
+				if (nii != null)
+				{
+					try
+					{
+						if (nii.Item != null && nii.Item.Address != 0)
+						{
+							var safe = TryGetRef(() => new CustomItemData(nii.Item!, GameController, EKind.Shop, nii.GetClientRectCache, -1));
+							if (safe != null) items.Add(safe);
+						}
+					}
+					catch { }
+				}
+				else
+				{
+					try
+					{
+						Entity? maybeEntity = null;
+						foreach (var pname in new[] { "Item", "Entity", "ItemEntity" })
+						{
+							maybeEntity = GetPropertyValue(el, pname) as Entity;
+							if (maybeEntity != null && maybeEntity.Address != 0) break;
+						}
+						if (maybeEntity != null && maybeEntity.Address != 0)
+						{
+							var safe = TryGetRef(() => new CustomItemData(maybeEntity, GameController, EKind.Shop, el.GetClientRectCache, -1));
+							if (safe != null) items.Add(safe);
+						}
+					}
+					catch { }
+				}
+
+				if (depth >= maxDepth) continue;
+				var children = el.Children;
+				if (children != null)
+				{
+					for (int i = 0; i < children.Count; i++)
+					{
+						var ch = children[i];
+						if (ch != null && ch.Address != 0 && ch.IsVisible)
+							stack.Push((ch, depth + 1));
+					}
+				}
+			}
+		}
+		catch { }
 	}
 
 	private void ProcessRewardsWindow(Element? hoveredItem)
