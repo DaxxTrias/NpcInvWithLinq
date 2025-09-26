@@ -154,7 +154,8 @@ public partial class NPCInvWithLinq : BaseSettingsPlugin<NPCInvWithLinqSettings>
 			CollectItemsFromPanel(panel, items);
 			if (items.Count == 0) return;
 
-			var filtered = items.Where(ItemInFilter).ToList();
+			// For non-tabbed panels, evaluate filters with the item's own TabIndex to avoid tab mismatch
+			var filtered = items.Where(it => ItemInFilterSafe(it, it.TabIndex)).ToList();
 			if (filtered.Count == 0) return;
 
 			foreach (var item in filtered)
@@ -215,11 +216,106 @@ public partial class NPCInvWithLinq : BaseSettingsPlugin<NPCInvWithLinqSettings>
 				}
 				else if (candidate is Element el)
 				{
+					// Enumerate any Inventory collections exposed on this element
+					var inventories = TryGetInventoriesFromProperties(el, "Inventories", "VisibleInventories", "NestedVisibleInventory", "VisibleStash");
+					if (inventories != null)
+					{
+						foreach (var inv in inventories)
+						{
+							if (inv == null) continue;
+							try
+							{
+								var uiSlots = TryGetRef(() => inv.VisibleInventoryItems as IList<NormalInventoryItem>);
+								if (uiSlots != null)
+								{
+									foreach (var slot in uiSlots)
+									{
+										try
+										{
+											if (slot?.Item == null || slot.Item.Address == 0) continue;
+											var safe = TryGetRef(() => new CustomItemData(slot.Item, GameController, EKind.Shop, slot.GetClientRectCache, -1));
+											if (safe != null) items.Add(safe);
+										}
+										catch { }
+									}
+								}
+							}
+							catch { }
+						}
+					}
+
+					// Also try direct lists of NormalInventoryItem on common property names
+					var normalItems = TryGetNormalInventoryItemsFromProperties(el, "VisibleInventoryItems", "YourOfferItems", "OtherOfferItems", "Items");
+					if (normalItems != null)
+					{
+						foreach (var slot in normalItems)
+						{
+							try
+							{
+								if (slot?.Item == null || slot.Item.Address == 0) continue;
+								var safe = TryGetRef(() => new CustomItemData(slot.Item, GameController, EKind.Shop, slot.GetClientRectCache, -1));
+								if (safe != null) items.Add(safe);
+							}
+							catch { }
+						}
+					}
+
+					// Fallback deep traversal
 					CollectNormalInventoryItemsFromDescendants(el, items, 6, 4096);
 				}
 			}
 			catch { }
 		}
+	}
+
+	private static List<ExileCore2.PoEMemory.MemoryObjects.Inventory>? TryGetInventoriesFromProperties(object source, params string[] propertyNames)
+	{
+		foreach (var name in propertyNames)
+		{
+			try
+			{
+				var val = GetPropertyValue(source, name);
+				if (val is System.Collections.IEnumerable enumerable)
+				{
+					var list = new List<ExileCore2.PoEMemory.MemoryObjects.Inventory>();
+					foreach (var obj in enumerable)
+					{
+						if (obj is ExileCore2.PoEMemory.MemoryObjects.Inventory inv && inv != null)
+						{
+							list.Add(inv);
+						}
+					}
+					if (list.Count > 0)
+						return list;
+				}
+			}
+			catch { }
+		}
+		return null;
+	}
+
+	private static List<NormalInventoryItem>? TryGetNormalInventoryItemsFromProperties(object source, params string[] propertyNames)
+	{
+		foreach (var name in propertyNames)
+		{
+			try
+			{
+				var val = GetPropertyValue(source, name);
+				if (val is System.Collections.IEnumerable enumerable)
+				{
+					var list = new List<NormalInventoryItem>();
+					foreach (var obj in enumerable)
+					{
+						if (obj is NormalInventoryItem nii && nii != null)
+							list.Add(nii);
+					}
+					if (list.Count > 0)
+						return list;
+				}
+			}
+			catch { }
+		}
+		return null;
 	}
 
 	private void CollectNormalInventoryItemsFromDescendants(Element root, List<CustomItemData> items, int maxDepth = 6, int maxNodes = 4096)
