@@ -142,16 +142,22 @@ public partial class NPCInvWithLinq
 							if (!isVisible && obj is Element elem)
 								isVisible = elem.IsVisible;
 
-							var entity = nii?.Item;
-							if (entity == null)
-							{
-								entity = GetPropertyValue(obj, "Item") as Entity;
-							}
-							if (entity is { Address: not 0, IsValid: true } && isVisible)
-							{
-								var rect = (obj as Element)?.GetClientRectCache ?? nii?.GetClientRectCache ?? default;
-								items.Add(new CustomItemData(entity, GameController, EKind.Shop, rect, tabIndex));
-							}
+						var entity = nii?.Item;
+						if (entity == null)
+						{
+							entity = GetPropertyValue(obj, "Item") as Entity;
+						}
+						if (entity is { Address: not 0, IsValid: true } && isVisible)
+						{
+							// Validate entity before creating ItemData
+							if (!IsEntityValidForItemData(entity))
+								continue;
+
+							var rect = (obj as Element)?.GetClientRectCache ?? nii?.GetClientRectCache ?? default;
+							var safeItem = TryGetRef(() => new CustomItemData(entity, GameController, EKind.Shop, rect, tabIndex));
+							if (safeItem != null)
+								items.Add(safeItem);
+						}
 						}
 						catch { }
 					}
@@ -180,7 +186,13 @@ public partial class NPCInvWithLinq
 				// Only add items that are visible to prevent ghost items from other inventories
 				if (x?.Item is { Address: not 0, IsValid: true } && x.IsVisible)
 				{
-					items.Add(new CustomItemData(x.Item, GameController, EKind.Shop, x.GetClientRectCache, tabIndex));
+					// Validate entity before creating ItemData
+					if (!IsEntityValidForItemData(x.Item))
+						continue;
+
+					var safeItem = TryGetRef(() => new CustomItemData(x.Item, GameController, EKind.Shop, x.GetClientRectCache, tabIndex));
+					if (safeItem != null)
+						items.Add(safeItem);
 				}
 			}
 			catch { }

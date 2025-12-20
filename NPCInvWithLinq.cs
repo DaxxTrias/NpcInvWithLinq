@@ -177,6 +177,11 @@ public partial class NPCInvWithLinq : BaseSettingsPlugin<NPCInvWithLinqSettings>
 				foreach (var ent in serverInventory.Items)
 				{
 					if (ent == null || ent.Address == 0) continue;
+
+					// Validate entity before creating ItemData
+					if (!IsEntityValidForItemData(ent))
+						continue;
+
 					var safe = TryGetRef(() => new CustomItemData(ent, GameController, EKind.Shop, default, -1));
 					if (safe != null) items.Add(safe);
 				}
@@ -207,6 +212,11 @@ public partial class NPCInvWithLinq : BaseSettingsPlugin<NPCInvWithLinqSettings>
 							try
 							{
 								if (slot?.Item == null || slot.Item.Address == 0) continue;
+
+								// Validate entity before creating ItemData
+								if (!IsEntityValidForItemData(slot.Item))
+									continue;
+
 								var safe = TryGetRef(() => new CustomItemData(slot.Item, GameController, EKind.Shop, slot.GetClientRectCache, -1));
 								if (safe != null) items.Add(safe);
 							}
@@ -233,6 +243,11 @@ public partial class NPCInvWithLinq : BaseSettingsPlugin<NPCInvWithLinqSettings>
 										try
 										{
 											if (slot?.Item == null || slot.Item.Address == 0) continue;
+
+											// Validate entity before creating ItemData
+											if (!IsEntityValidForItemData(slot.Item))
+												continue;
+
 											var safe = TryGetRef(() => new CustomItemData(slot.Item, GameController, EKind.Shop, slot.GetClientRectCache, -1));
 											if (safe != null) items.Add(safe);
 										}
@@ -253,6 +268,11 @@ public partial class NPCInvWithLinq : BaseSettingsPlugin<NPCInvWithLinqSettings>
 							try
 							{
 								if (slot?.Item == null || slot.Item.Address == 0) continue;
+
+								// Validate entity before creating ItemData
+								if (!IsEntityValidForItemData(slot.Item))
+									continue;
+
 								var safe = TryGetRef(() => new CustomItemData(slot.Item, GameController, EKind.Shop, slot.GetClientRectCache, -1));
 								if (safe != null) items.Add(safe);
 							}
@@ -332,37 +352,45 @@ public partial class NPCInvWithLinq : BaseSettingsPlugin<NPCInvWithLinqSettings>
 				visited++;
 				if (el == null || el.Address == 0 || !el.IsVisible) continue;
 
-				var nii = el as NormalInventoryItem;
-				if (nii != null)
+			var nii = el as NormalInventoryItem;
+			if (nii != null)
+			{
+				try
 				{
-					try
+					if (nii.Item != null && nii.Item.Address != 0)
 					{
-						if (nii.Item != null && nii.Item.Address != 0)
-						{
-							var safe = TryGetRef(() => new CustomItemData(nii.Item!, GameController, EKind.Shop, nii.GetClientRectCache, -1));
-							if (safe != null) items.Add(safe);
-						}
+						// Validate entity before creating ItemData
+						if (!IsEntityValidForItemData(nii.Item))
+							continue;
+
+						var safe = TryGetRef(() => new CustomItemData(nii.Item!, GameController, EKind.Shop, nii.GetClientRectCache, -1));
+						if (safe != null) items.Add(safe);
 					}
-					catch { }
 				}
-				else
+				catch { }
+			}
+			else
+			{
+				try
 				{
-					try
+					Entity? maybeEntity = null;
+					foreach (var pname in new[] { "Item", "Entity", "ItemEntity" })
 					{
-						Entity? maybeEntity = null;
-						foreach (var pname in new[] { "Item", "Entity", "ItemEntity" })
-						{
-							maybeEntity = GetPropertyValue(el, pname) as Entity;
-							if (maybeEntity != null && maybeEntity.Address != 0) break;
-						}
-						if (maybeEntity != null && maybeEntity.Address != 0)
-						{
-							var safe = TryGetRef(() => new CustomItemData(maybeEntity, GameController, EKind.Shop, el.GetClientRectCache, -1));
-							if (safe != null) items.Add(safe);
-						}
+						maybeEntity = GetPropertyValue(el, pname) as Entity;
+						if (maybeEntity != null && maybeEntity.Address != 0) break;
 					}
-					catch { }
+					if (maybeEntity != null && maybeEntity.Address != 0)
+					{
+						// Validate entity before creating ItemData
+						if (!IsEntityValidForItemData(maybeEntity))
+							continue;
+
+						var safe = TryGetRef(() => new CustomItemData(maybeEntity, GameController, EKind.Shop, el.GetClientRectCache, -1));
+						if (safe != null) items.Add(safe);
+					}
 				}
+				catch { }
+			}
 
 				if (depth >= maxDepth) continue;
 				var children = el.Children;
@@ -413,14 +441,18 @@ public partial class NPCInvWithLinq : BaseSettingsPlugin<NPCInvWithLinqSettings>
 
 	private List<CustomItemData> GetRewardItems() =>
 		GameController.IngameState.IngameUi.QuestRewardWindow.GetPossibleRewards()
-			.Where(item => item.Item2 is { Address: not 0, IsValid: true })
-			.Select(item => new CustomItemData(item.Item1, GameController, EKind.QuestReward, item.Item2.GetClientRectCache))
+			.Where(item => item.Item2 is { Address: not 0, IsValid: true } && item.Item1 != null && IsEntityValidForItemData(item.Item1))
+			.Select(item => TryGetRef(() => new CustomItemData(item.Item1, GameController, EKind.QuestReward, item.Item2.GetClientRectCache)))
+			.Where(item => item != null)
+			.Select(item => item!)
 			.ToList();
 
 	private List<CustomItemData> GetRitualItems() =>
 	GameController.IngameState.IngameUi.RitualWindow.InventoryElement.VisibleInventoryItems
-		.Where(item => item.Item is { Address: not 0, IsValid: true })
-		.Select(item => new CustomItemData(item.Item, GameController, EKind.RitualReward, item.GetClientRectCache))
+		.Where(item => item.Item is { Address: not 0, IsValid: true } && IsEntityValidForItemData(item.Item))
+		.Select(item => TryGetRef(() => new CustomItemData(item.Item, GameController, EKind.RitualReward, item.GetClientRectCache)))
+		.Where(item => item != null)
+		.Select(item => item!)
 		.ToList();
 	private void ProcessPurchaseWindow(Element? hoveredItem)
 	{
@@ -886,15 +918,29 @@ public partial class NPCInvWithLinq : BaseSettingsPlugin<NPCInvWithLinqSettings>
 	{
 		if (Settings.FilterTest.Value is { Length: > 0 } && hoveredItem != null)
 		{
-			var expr = Settings.FilterTest;
-			FilterPreProcessing.TryExtractOpenCounts(FilterPreProcessing.NormalizeExpression(FilterPreProcessing.StripComments(expr)), out var cleaned, out var minPref, out var minSuff);
-			var filter = ItemFilter.LoadFromString<CustomItemData>(cleaned);
-			var tabIdx = _lastSelectedTabIndex >= 0 ? _lastSelectedTabIndex : 0;
-			var item = new CustomItemData(hoveredItem.Entity, GameController, EKind.Shop, default, tabIdx);
-			var openOk = (minPref is null || OpenPrefixCount(item) >= minPref)
-						 && (minSuff is null || OpenSuffixCount(item) >= minSuff);
-			var matched = openOk && filter.Matches(item);
-			DebugWindow.LogMsg($"Debug item match on hover: {matched}");
+			try
+			{
+				// Validate entity before creating ItemData
+				if (!IsEntityValidForItemData(hoveredItem.Entity))
+				{
+					DebugWindow.LogMsg($"Debug item match on hover: Invalid entity (failed validation)");
+					return;
+				}
+
+				var expr = Settings.FilterTest;
+				FilterPreProcessing.TryExtractOpenCounts(FilterPreProcessing.NormalizeExpression(FilterPreProcessing.StripComments(expr)), out var cleaned, out var minPref, out var minSuff);
+				var filter = ItemFilter.LoadFromString<CustomItemData>(cleaned);
+				var tabIdx = _lastSelectedTabIndex >= 0 ? _lastSelectedTabIndex : 0;
+				var item = new CustomItemData(hoveredItem.Entity, GameController, EKind.Shop, default, tabIdx);
+				var openOk = (minPref is null || OpenPrefixCount(item) >= minPref)
+							 && (minSuff is null || OpenSuffixCount(item) >= minSuff);
+				var matched = openOk && filter.Matches(item);
+				DebugWindow.LogMsg($"Debug item match on hover: {matched}");
+			}
+			catch (Exception ex)
+			{
+				DebugWindow.LogMsg($"Debug item match on hover: Error - {ex.Message}");
+			}
 		}
 	}
 
@@ -1032,40 +1078,52 @@ public partial class NPCInvWithLinq : BaseSettingsPlugin<NPCInvWithLinqSettings>
 						out var previousSet) == true)
 				{
 					// Create a new WindowSet instance to avoid sharing references between tabs
-					var newSet = new WindowSet
-					{
-						Inventory = serverInventory,
-						Index = i,
-						Title = title,
-						IsVisible = isVisible,
-						TabNameElement = TryGetRef(() => inventory.TabButton),
-						// Only create CustomItemData for the selected tab to avoid stale Entity references
-						TradeWindowItems = (isSelected && visibleValidUiItems.Count > 0 ? visibleValidUiItems
-							.Where(x => x != null && x.Item != null && x.Item.Path != null)
-							.Select(x => new CustomItemData(x!.Item!, GameController, EKind.Shop, x!.GetClientRectCache, i))
-							.ToList() : new List<CustomItemData>()),
-						ServerItems = (serverInventory?.Items is { } items
-							? items.Where(x => x is { Path: { } })
-								.Select(x => new CustomItemData(x, GameController, EKind.Shop, default, i))
-								.ToList()
-							: new List<CustomItemData>())
-					};
-					return newSet;
-				}
-				var tabButton = TryGetRef(() => inventory.TabButton);
-				var newTab = new WindowSet
+				var newSet = new WindowSet
 				{
 					Inventory = serverInventory,
 					Index = i,
-					ServerItems = (serverInventory?.Items is { } items2 ? items2.Where(x => x is { Path: { } }).Select(x => new CustomItemData(x, GameController, EKind.Shop, default, i)).ToList() : new List<CustomItemData>()),
-					TradeWindowItems = (isSelected && visibleValidUiItems.Count > 0 ? visibleValidUiItems
-						.Where(x => x != null && x.Item != null && x.Item.Path != null)
-						.Select(x => new CustomItemData(x!.Item!, GameController, EKind.Shop, x!.GetClientRectCache, i))
-						.ToList() : new List<CustomItemData>()),
 					Title = title,
 					IsVisible = isVisible,
-					TabNameElement = tabButton
+					TabNameElement = TryGetRef(() => inventory.TabButton),
+					// Only create CustomItemData for the selected tab to avoid stale Entity references
+					TradeWindowItems = (isSelected && visibleValidUiItems.Count > 0 ? visibleValidUiItems
+						.Where(x => x != null && x.Item != null && x.Item.Path != null && IsEntityValidForItemData(x.Item))
+						.Select(x => TryGetRef(() => new CustomItemData(x!.Item!, GameController, EKind.Shop, x!.GetClientRectCache, i)))
+						.Where(x => x != null)
+						.Select(x => x!)
+						.ToList() : new List<CustomItemData>()),
+					ServerItems = (serverInventory?.Items is { } items
+						? items.Where(x => x is { Path: { } } && IsEntityValidForItemData(x))
+							.Select(x => TryGetRef(() => new CustomItemData(x, GameController, EKind.Shop, default, i)))
+							.Where(x => x != null)
+							.Select(x => x!)
+							.ToList()
+						: new List<CustomItemData>())
 				};
+					return newSet;
+				}
+			var tabButton = TryGetRef(() => inventory.TabButton);
+			var newTab = new WindowSet
+			{
+				Inventory = serverInventory,
+				Index = i,
+				ServerItems = (serverInventory?.Items is { } items2 
+					? items2.Where(x => x is { Path: { } } && IsEntityValidForItemData(x))
+						.Select(x => TryGetRef(() => new CustomItemData(x, GameController, EKind.Shop, default, i)))
+						.Where(x => x != null)
+						.Select(x => x!)
+						.ToList() 
+					: new List<CustomItemData>()),
+				TradeWindowItems = (isSelected && visibleValidUiItems.Count > 0 ? visibleValidUiItems
+					.Where(x => x != null && x.Item != null && x.Item.Path != null && IsEntityValidForItemData(x.Item))
+					.Select(x => TryGetRef(() => new CustomItemData(x!.Item!, GameController, EKind.Shop, x!.GetClientRectCache, i)))
+					.Where(x => x != null)
+					.Select(x => x!)
+					.ToList() : new List<CustomItemData>()),
+				Title = title,
+				IsVisible = isVisible,
+				TabNameElement = tabButton
+			};
 				return newTab;
 			}
 			catch
@@ -1141,7 +1199,10 @@ public partial class NPCInvWithLinq : BaseSettingsPlugin<NPCInvWithLinqSettings>
 			}
 			catch
 			{
-				// Skip rules that throw exceptions
+				// Silently skip items that cause filter evaluation errors
+				// This catches exceptions from ItemFilterLibrary even if validation missed something
+				// The item will simply not be highlighted rather than crashing the plugin
+				continue;
 			}
 		}
 		return false;
@@ -1168,7 +1229,8 @@ public partial class NPCInvWithLinq : BaseSettingsPlugin<NPCInvWithLinqSettings>
 			}
 			catch
 			{
-				// Skip rules that throw exceptions
+				// Silently skip items that cause filter evaluation errors
+				continue;
 			}
 		}
 		return Settings.DefaultFrameColor;
@@ -1188,29 +1250,30 @@ public partial class NPCInvWithLinq : BaseSettingsPlugin<NPCInvWithLinqSettings>
 		{
 			if (ItemInFilterSafe(item, _lastSelectedTabIndex))
 			{
-				// Get the color from the first matching rule
-				foreach (var binding in _ruleBindings)
+			// Get the color from the first matching rule
+			foreach (var binding in _ruleBindings)
+			{
+				if (!binding.Rule.Enabled || binding.Filter == null)
+					continue;
+				
+				// Determine if this item is from a hidden tab
+				bool isHiddenTab = item.TabIndex >= 0 && item.TabIndex != _lastSelectedTabIndex;
+				
+				try
 				{
-					if (!binding.Rule.Enabled || binding.Filter == null)
+					// Skip rules with open affix constraints for hidden tabs
+					if (isHiddenTab && (binding.MinOpenPrefixes != null || binding.MinOpenSuffixes != null))
 						continue;
-					
-					// Determine if this item is from a hidden tab
-					bool isHiddenTab = item.TabIndex >= 0 && item.TabIndex != _lastSelectedTabIndex;
-					
-					try
-					{
-						// Skip rules with open affix constraints for hidden tabs
-						if (isHiddenTab && (binding.MinOpenPrefixes != null || binding.MinOpenSuffixes != null))
-							continue;
-							
-						if (binding.Filter.Matches(item))
-							return binding.Rule.Color;
-					}
-					catch
-					{
-						// Skip rules that throw exceptions
-					}
+						
+					if (binding.Filter.Matches(item))
+						return binding.Rule.Color;
 				}
+				catch
+				{
+					// Silently skip items that cause filter evaluation errors
+					continue;
+				}
+			}
 			}
 		}
 		
@@ -1277,6 +1340,83 @@ public partial class NPCInvWithLinq : BaseSettingsPlugin<NPCInvWithLinqSettings>
 	private static T TryGetValue<T>(Func<T> getter) where T : struct
 	{
 		try { return getter(); } catch { return default; }
+	}
+
+	/// <summary>
+	/// Validates an entity to ensure it won't cause exceptions in ItemFilterLibrary.
+	/// Checks the Mods component if it exists for null ItemMod entries.
+	/// </summary>
+	private static bool IsEntityValidForItemData(Entity? entity)
+	{
+		if (entity == null || entity.Address == 0)
+			return false;
+
+		try
+		{
+			// Check if entity has a Mods component
+			if (!entity.TryGetComponent<Mods>(out var modsComp))
+			{
+				// No Mods component is fine (e.g., currency items)
+				return true;
+			}
+
+			// If Mods component exists, validate it thoroughly
+			return IsModsComponentValid(modsComp);
+		}
+		catch
+		{
+			// If any validation throws, consider invalid
+			return false;
+		}
+	}
+
+	/// <summary>
+	/// Validates a Mods component to ensure it won't cause NullReferenceException in ItemFilterLibrary.
+	/// Checks for null ItemMod entries in all mod collections.
+	/// </summary>
+	private static bool IsModsComponentValid(Mods? modsComp)
+	{
+		if (modsComp == null)
+			return false;
+
+		try
+		{
+			// Check all mod collections for null entries or null ModRecords
+			// This prevents ItemFilterLibrary.ModsData constructor from throwing NullReferenceException
+			// The critical issue is in ModsData.Prefixes/Suffixes where ExplicitMods.Where(m => m.ModRecord.AffixType...)
+			// will throw if any ItemMod in the collection is null
+			var modCollections = new[]
+			{
+				modsComp.ItemMods,
+				modsComp.ExplicitMods,
+				modsComp.ImplicitMods,
+				modsComp.EnchantedMods,
+				modsComp.CorruptionImplicitMods,
+				modsComp.SynthesisMods
+			};
+
+			foreach (var collection in modCollections)
+			{
+				if (collection == null)
+					continue;
+
+				// Check if collection contains any null ItemMod or ItemMod with null ModRecord
+				foreach (var mod in collection)
+				{
+					if (mod == null || mod.ModRecord == null)
+						return false;
+				}
+			}
+
+			// Note: ExplicitMods can be empty (valid for currency, white items, etc.)
+			// We only check that if it exists, it doesn't contain null entries
+			return true;
+		}
+		catch
+		{
+			// If any access throws (e.g., memory read issues), consider invalid
+			return false;
+		}
 	}
 	
 	// ===== Open affix support =====
