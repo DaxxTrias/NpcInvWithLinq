@@ -96,6 +96,15 @@ public partial class NPCInvWithLinq : BaseSettingsPlugin<NPCInvWithLinqSettings>
 		_rewardItems = new TimeCache<List<CustomItemData>>(GetRewardItems, 1000);
 		_ritualItems = new TimeCache<List<CustomItemData>>(GetRitualItems, 1000);
 	}
+
+	private void InvalidateItemCaches()
+	{
+		// Force recreation of all cached items to clear ItemData internal caches
+		// This prevents stale ItemStats caching when filters are reloaded
+		try { _storedStashAndWindows?.ForceUpdate(); } catch { }
+		try { _rewardItems?.ForceUpdate(); } catch { }
+		try { _ritualItems?.ForceUpdate(); } catch { }
+	}
 	public override bool Initialise()
 	{
 		Settings.ReloadFilters.OnPressed = LoadRuleFiles;
@@ -1012,6 +1021,10 @@ public partial class NPCInvWithLinq : BaseSettingsPlugin<NPCInvWithLinqSettings>
 			}
 			
 			Settings.NPCInvRules = newRules;
+			
+			// Invalidate item caches to force recreation with fresh ItemData instances
+			// This clears internal ItemStats caching that can cause stale filter results
+			InvalidateItemCaches();
 		}
 		catch (Exception e)
 		{
