@@ -65,6 +65,7 @@ public partial class NPCInvWithLinq : BaseSettingsPlugin<NPCInvWithLinqSettings>
 	private int _selectedIndexHint = -1;
 	private long _selectedIndexHintMs = 0;
 	private long _frameCounter = 0;
+	private const int SpecialWindowTabIndex = -1;
 
 	private sealed class RuleBinding
 	{
@@ -421,7 +422,8 @@ public partial class NPCInvWithLinq : BaseSettingsPlugin<NPCInvWithLinqSettings>
 	{
 		if (!GameController.IngameState.IngameUi.QuestRewardWindow.IsVisible) return;
 
-		foreach (var reward in _rewardItems?.Value.Where(x => ItemInFilter(x)) ?? Enumerable.Empty<CustomItemData>())
+		var rewardItems = _rewardItems?.Value ?? [];
+		foreach (var reward in rewardItems.Where(x => ItemInFilterSafe(x, SpecialWindowTabIndex)))
 		{
 			var frameColor = GetFilterColor(reward);
 			if (hoveredItem != null && hoveredItem.Tooltip.GetClientRectCache.Intersects(reward.ClientRectangle) && hoveredItem.Entity.Address != reward.Entity.Address)
@@ -436,7 +438,8 @@ public partial class NPCInvWithLinq : BaseSettingsPlugin<NPCInvWithLinqSettings>
 	{
 		if (!GameController.IngameState.IngameUi.RitualWindow.IsVisible) return;
 
-		foreach (var reward in _ritualItems?.Value.Where(x => ItemInFilter(x)) ?? Enumerable.Empty<CustomItemData>())
+		var ritualItems = _ritualItems?.Value ?? [];
+		foreach (var reward in ritualItems.Where(x => ItemInFilterSafe(x, SpecialWindowTabIndex)))
 		{
 			var frameColor = GetFilterColor(reward);
 			if (hoveredItem != null && hoveredItem.Tooltip.GetClientRectCache.Intersects(reward.ClientRectangle) && hoveredItem.Entity.Address != reward.Entity.Address)
@@ -448,21 +451,33 @@ public partial class NPCInvWithLinq : BaseSettingsPlugin<NPCInvWithLinqSettings>
 		}
 	}
 
-	private List<CustomItemData> GetRewardItems() =>
-		GameController.IngameState.IngameUi.QuestRewardWindow.GetPossibleRewards()
+	private List<CustomItemData> GetRewardItems()
+	{
+		var rewards = TryGetRef(() => GameController.IngameState.IngameUi.QuestRewardWindow.GetPossibleRewards());
+		if (rewards == null)
+			return [];
+
+		return rewards
 			.Where(item => item.Item2 is { Address: not 0, IsValid: true } && item.Item1 != null && IsEntityValidForItemData(item.Item1))
-			.Select(item => TryGetRef(() => new CustomItemData(item.Item1, GameController, EKind.QuestReward, item.Item2.GetClientRectCache)))
+			.Select(item => TryGetRef(() => new CustomItemData(item.Item1, GameController, EKind.QuestReward, item.Item2.GetClientRectCache, SpecialWindowTabIndex)))
 			.Where(item => item != null)
 			.Select(item => item!)
 			.ToList();
+	}
 
-	private List<CustomItemData> GetRitualItems() =>
-	GameController.IngameState.IngameUi.RitualWindow.InventoryElement.VisibleInventoryItems
-		.Where(item => item.Item is { Address: not 0, IsValid: true } && IsEntityValidForItemData(item.Item))
-		.Select(item => TryGetRef(() => new CustomItemData(item.Item, GameController, EKind.RitualReward, item.GetClientRectCache)))
-		.Where(item => item != null)
-		.Select(item => item!)
-		.ToList();
+	private List<CustomItemData> GetRitualItems()
+	{
+		var visibleItems = TryGetRef(() => GameController.IngameState.IngameUi.RitualWindow.InventoryElement.VisibleInventoryItems);
+		if (visibleItems == null)
+			return [];
+
+		return visibleItems
+			.Where(item => item?.Item is { Address: not 0, IsValid: true } && IsEntityValidForItemData(item.Item))
+			.Select(item => TryGetRef(() => new CustomItemData(item.Item, GameController, EKind.RitualReward, item.GetClientRectCache, SpecialWindowTabIndex)))
+			.Where(item => item != null)
+			.Select(item => item!)
+			.ToList();
+	}
 	private void ProcessPurchaseWindow(Element? hoveredItem)
 	{
 		if (!IsPurchaseWindowVisible())
