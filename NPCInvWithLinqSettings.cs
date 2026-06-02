@@ -1,4 +1,4 @@
-﻿using ExileCore2.Shared.Attributes;
+using ExileCore2.Shared.Attributes;
 using ExileCore2.Shared.Interfaces;
 using ExileCore2.Shared.Nodes;
 using System.Collections.Generic;
@@ -137,6 +137,7 @@ public class NPCInvWithLinqSettings : ISettings
                     if (ImGui.ColorPicker4($"##picker{i}", ref pickerColor, ImGuiColorEditFlags.AlphaBar | ImGuiColorEditFlags.DisplayRGB | ImGuiColorEditFlags.DisplayHex | ImGuiColorEditFlags.InputRGB | ImGuiColorEditFlags.AlphaPreview))
                     {
                         tempNpcInvRules[i].Color.Value = Color.FromArgb((int)(pickerColor.W * 255), (int)(pickerColor.X * 255), (int)(pickerColor.Y * 255), (int)(pickerColor.Z * 255));
+                        _hexByRuleKey[$"{tempNpcInvRules[i].Name}|{tempNpcInvRules[i].Location}"] = ToHex(tempNpcInvRules[i].Color.Value);
                     }
                     ImGui.EndPopup();
                 }
