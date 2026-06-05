@@ -16,7 +16,6 @@ using static NPCInvWithLinq.ServerAndStashWindow;
 using RectangleF = ExileCore2.Shared.RectangleF;
 using System.Diagnostics;
 using System.Windows.Forms;
-using System.Text.RegularExpressions;
 using ExileCore2.PoEMemory.Components;
 using ExileCore2.PoEMemory.Elements.InventoryElements; // Haggle window inventory parsing
 using System.Collections;
@@ -71,15 +70,11 @@ public partial class NPCInvWithLinq : BaseSettingsPlugin<NPCInvWithLinqSettings>
 	{
 		public NPCInvRule Rule { get; }
 		public ItemFilter<CustomItemData>? Filter { get; }
-		public int? MinOpenPrefixes { get; }
-		public int? MinOpenSuffixes { get; }
 
-		public RuleBinding(NPCInvRule rule, ItemFilter<CustomItemData>? filter, int? minOpenPrefixes, int? minOpenSuffixes)
+		public RuleBinding(NPCInvRule rule, ItemFilter<CustomItemData>? filter)
 		{
 			Rule = rule ?? throw new ArgumentNullException(nameof(rule));
 			Filter = filter; // may be null when rule is disabled; callers must guard
-			MinOpenPrefixes = minOpenPrefixes;
-			MinOpenSuffixes = minOpenSuffixes;
 		}
 	}
 
@@ -951,14 +946,11 @@ public partial class NPCInvWithLinq : BaseSettingsPlugin<NPCInvWithLinqSettings>
 					return;
 				}
 
-				var expr = Settings.FilterTest;
-				FilterPreProcessing.TryExtractOpenCounts(FilterPreProcessing.NormalizeExpression(FilterPreProcessing.StripComments(expr)), out var cleaned, out var minPref, out var minSuff);
-				var filter = ItemFilter.LoadFromString<CustomItemData>(cleaned);
+				var expr = Settings.FilterTest.Value;
+				var filter = ItemFilter.LoadFromString<CustomItemData>(expr);
 				var tabIdx = _lastSelectedTabIndex >= 0 ? _lastSelectedTabIndex : 0;
 				var item = new CustomItemData(hoveredItem.Entity, GameController, EKind.Shop, default, tabIdx);
-				var openOk = (minPref is null || OpenPrefixCount(item) >= minPref)
-							 && (minSuff is null || OpenSuffixCount(item) >= minSuff);
-				var matched = openOk && filter.Matches(item);
+				var matched = filter.Matches(item);
 				DebugWindow.LogMsg($"Debug item match on hover: {matched}");
 			}
 			catch (Exception ex)
@@ -1024,15 +1016,12 @@ public partial class NPCInvWithLinq : BaseSettingsPlugin<NPCInvWithLinqSettings>
 			foreach (var rule in newRules)
 			{
 				ItemFilter<CustomItemData>? filter = null;
-				int? minP = null, minS = null;
 				if (rule.Enabled)
 				{
 					var fullPath = Path.Combine(pickitConfigFileDirectory, rule.Location);
-					var text = File.ReadAllText(fullPath);
-					FilterPreProcessing.TryExtractOpenCounts(FilterPreProcessing.NormalizeExpression(FilterPreProcessing.StripComments(text)), out var cleaned, out minP, out minS);
-					filter = ItemFilter.LoadFromString<CustomItemData>(cleaned);
+					filter = ItemFilter.LoadFromPath<CustomItemData>(fullPath);
 				}
-				_ruleBindings.Add(new RuleBinding(rule, filter, minP, minS));
+				_ruleBindings.Add(new RuleBinding(rule, filter));
 			}
 			
 			Settings.NPCInvRules = newRules;
@@ -1226,29 +1215,12 @@ public partial class NPCInvWithLinq : BaseSettingsPlugin<NPCInvWithLinqSettings>
 			return false;
 		}
 		
-		// Determine if this item is from a hidden tab
-		// For positive indices, hidden means different tab
-		// For negative indices, we already handled the matching above
-		bool isHiddenTab = item.TabIndex >= 0 && item.TabIndex != currentSelectedTabIndex;
-			
 		foreach (var b in _ruleBindings)
 		{
 			if (!b.Rule.Enabled || b.Filter == null)
 				continue;
 			try
 			{
-				// Skip open affix constraints for hidden tabs to avoid accessing stale Entity components
-				if (!isHiddenTab)
-				{
-					if (!ExtraOpenAffixConstraintsPass(item, b))
-						continue;
-				}
-				else if (b.MinOpenPrefixes != null || b.MinOpenSuffixes != null)
-				{
-					// Skip this rule entirely for hidden tabs if it has open affix constraints
-					continue;
-				}
-				
 				if (b.Filter.Matches(item))
 				{
 					matchingBinding = b;
@@ -1422,37 +1394,6 @@ public partial class NPCInvWithLinq : BaseSettingsPlugin<NPCInvWithLinqSettings>
 			// If any access throws (e.g., memory read issues), consider invalid
 			return false;
 		}
-	}
-	
-	// ===== Open affix support =====
-	private static bool ExtraOpenAffixConstraintsPass(CustomItemData item, RuleBinding rule)
-	{
-		if (rule.MinOpenPrefixes is null && rule.MinOpenSuffixes is null)
-			return true;
-			
-		// Never check open affixes for items without proper tab assignment
-		// This includes haggle/expedition items and prevents entity memory issues
-		if (item.TabIndex < 0)
-			return false;
-			
-		if (rule.MinOpenPrefixes is int pReq && OpenPrefixCount(item) < pReq) return false;
-		if (rule.MinOpenSuffixes is int sReq && OpenSuffixCount(item) < sReq) return false;
-		return true;
-	}
-	
-	private static readonly Regex OpenPrefixRegex = new Regex(@"OpenPrefixCount\s*\(\)\s*(==|>=|<=|>|<)\s*(\d+)", RegexOptions.Compiled | RegexOptions.CultureInvariant);
-	private static readonly Regex OpenSuffixRegex = new Regex(@"OpenSuffixCount\s*\(\)\s*(==|>=|<=|>|<)\s*(\d+)", RegexOptions.Compiled | RegexOptions.CultureInvariant);
-
-	
-	// Minimal port of open affix counting from ItemfilterExtension with AffixType/Tags-based max fallbacks
-	private static int OpenPrefixCount(ItemFilterLibrary.ItemData item)
-	{
-		return ItemFilterExtensions.OpenPrefixCount(item);
-	}
-	
-	private static int OpenSuffixCount(ItemFilterLibrary.ItemData item)
-	{
-		return ItemFilterExtensions.OpenSuffixCount(item);
 	}
 	
 	private static bool TryGetIntProperty(object? source, out int value, params string[] names)

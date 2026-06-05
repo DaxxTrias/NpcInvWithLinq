@@ -1,6 +1,6 @@
-## Inventory Frames Deep Dive: Sourcing, Processing, Rendering (PurchaseWindow & HaggleWindow)
+# Inventory Frames Deep Dive: Sourcing, Processing, Rendering (PurchaseWindow & HaggleWindow)
 
-### Overview
+## Overview
 
 This document explains how `NPCInvWithLinq` sources items from UI inventories, applies filtering/constraints, and renders frames/overlays. Emphasis is on the vendor `PurchaseWindow` and Expedition `HaggleWindow` flows, including auto-purchase behavior and safety/performance notes.
 
@@ -68,28 +68,19 @@ This document explains how `NPCInvWithLinq` sources items from UI inventories, a
 - `LoadRuleFiles()` discovers `*.ifl` files from `ConfigDirectory` or an optional custom folder.
 - Existing user-ordered rules are preserved if files still exist; new `.ifl` files are appended.
 - Each `NPCInvRule` yields a `RuleBinding` with:
-  - `Filter`: `ItemFilter<CustomItemData>` compiled from file content (null when rule disabled).
-  - `MinOpenPrefixes` / `MinOpenSuffixes`: extracted constraints.
+  - `Filter`: `ItemFilter<CustomItemData>` compiled directly from file content (null when rule disabled).
 - Precedence is top-to-bottom; first enabled rule that matches determines a positive match and color.
 
-### Open prefix/suffix constraints
+### Open prefix/suffix data
 
-- `TryExtractOpenCounts(text, out cleaned, out minP, out minS)` parses and removes patterns like:
-  - `OpenPrefixCount() >= N`, `OpenSuffixCount() >= N`, etc.
-- The expressions are replaced with `true` so the remaining text can be compiled by `ItemFilterLibrary`.
-- The minimum requirements are merged by `MergeConstraint` to a single effective threshold per side.
+- Open affix data is provided by ItemFilterV2 on `ModsInfo`.
+- Use `ModsInfo.OpenPrefixCount >= N` and `ModsInfo.OpenSuffixCount >= N` for counts.
+- Use `ModsInfo.HasOpenPrefix` and `ModsInfo.HasOpenSuffix` for boolean checks.
 
 ### Affix counting implementation
 
-- `OpenPrefixCount(item)` and `OpenSuffixCount(item)` are computed as `max - used` (clamped at zero).
-- `GetMaxPrefixes/GetMaxSuffixes`: Computed via `ComputeMaxByTagsAndRarity`:
-  - Base max determined by tags (flask=1, jewel=2, default=3)
-  - Modified by rarity (normal=0, magic=min(baseMax,1), rare=baseMax, unique=0)
-- `GetPrefixCount/GetSuffixCount`: Obtained via reflection on `Mods` component:
-  - Direct properties: `PrefixesCount`/`SuffixesCount`
-  - Fallback: Count explicit mods by checking `IsPrefix`/`IsSuffix` or `ModRecord.AffixType`
-- **Tag Detection**: `GetItemTags` now computes tags directly without caching to prevent cross-tab contamination
-- All reflection is guarded; failures return conservative zeros to avoid crashes.
+- `ItemData.ModsInfo` is populated by ItemFilterV2 from the core `Mods` component.
+- Prefix/suffix counts and `HasOpen*` helpers are evaluated inside the normal ItemFilterV2 data model.
 
 ### Matching flow used across windows
 
@@ -97,9 +88,7 @@ This document explains how `NPCInvWithLinq` sources items from UI inventories, a
 - `ItemInFilterSafe(item, currentSelectedTabIndex)`:
   - **Critical Change**: Items with TabIndex -1 or from different tabs are treated as "hidden"
   - **Negative TabIndex Handling**: For haggle windows, negative indices must match exactly (-1 ≠ -2)
-  - For hidden tab items, rules with open affix constraints are skipped entirely
-  - This prevents accessing potentially stale Entity components from non-current tabs
-  - **ItemStats Protection**: The exact matching prevents ItemStats filters from reading stale data across haggle inventories
+  - **ItemStats/ModsInfo Protection**: The exact matching prevents filters from reading stale data across haggle inventories
   - Returns true on the first match (topmost rule wins)
 - `GetFilterColor(item)` mirrors the same precedence for coloring with entity validation.
 - `GetFilterColorForTab(items)` returns the color of the first rule that matches any item in the tab (uses safe filtering for hidden tabs).
@@ -158,8 +147,8 @@ This document explains how `NPCInvWithLinq` sources items from UI inventories, a
 
 - **Cross-Tab Entity Safety**:
   - **Key Innovation**: All `CustomItemData` objects now track their source TabIndex
-  - Items with TabIndex -1 or from non-current tabs are treated as "hidden" for open affix calculations
-  - This prevents accessing Entity components that may have been reused by the game for different items
+  - Negative TabIndex values and non-current tabs are isolated before filter evaluation
+  - This prevents filters from reading Entity data that may have been reused by the game for different items
   - **Haggle Window**: Multi-layer protection against ghosting:
     - Different negative TabIndex values (main: -1, buyback: -2)
     - Source isolation based on buyback state
@@ -167,9 +156,7 @@ This document explains how `NPCInvWithLinq` sources items from UI inventories, a
     - Bounds checking to exclude out-of-view items
     - Rectangle validation in `ItemInFilterSafe`
   - **ItemInFilterSafe**: Special logic for negative TabIndex values ensures exact matching
-  - Additional safety checks in `GetPrefixCount`, `GetSuffixCount`, and `ComputeMaxByTagsAndRarity` prevent any entity access for TabIndex < 0 items
-  - `ExtraOpenAffixConstraintsPass` immediately returns false for items with TabIndex < 0
-  - Trade-off: Tab highlighting doesn't work for filters using `OpenPrefixCount()` or `OpenSuffixCount()`
+  - Open affix filters use ItemFilterV2 `ModsInfo` data through normal rule evaluation
 - Resilience:
   - Almost all UI/memory access is wrapped in `try/catch` to avoid tearing the render loop.
   - `TryGetRef`/`TryGetValue` helpers return null/default on transient faults.
@@ -265,8 +252,8 @@ This document explains how `NPCInvWithLinq` sources items from UI inventories, a
 - Visibility and windows: `IsPurchaseWindowVisible`, `GetVisiblePurchaseWindow`.
 - Tab selection: `GetSelectedTabIndexFromContainer`, `DetectBuyback`.
 - Data sourcing: `UpdateCurrentTradeWindow`, `GetHaggleVisibleItemsWithLabel`, `TryFindHaggleInventoryGrid`, `GetRewardItems`, `GetRitualItems`.
-- Filtering/constraints: `LoadRuleFiles`, `ItemInFilter`, `ItemInFilterSafe`, `GetFilterColor`, `GetFilterColorForTab`, `TryExtractOpenCounts`, `OpenPrefixCount`, `OpenSuffixCount`.
-- Tag detection: `GetItemTags`, `ComputeMaxByTagsAndRarity`.
+- Filtering/constraints: `LoadRuleFiles`, `ItemInFilter`, `ItemInFilterSafe`, `GetFilterColor`, `GetFilterColorForTab`.
+- Open affix data: ItemFilterV2 `ModsInfo.OpenPrefixCount`, `ModsInfo.OpenSuffixCount`, `ModsInfo.HasOpenPrefix`, `ModsInfo.HasOpenSuffix`.
 - Rendering: `DrawItemFrame`, `DrawTabNameElementFrame`, `DrawServerItems`, `CalculateServerItemsBox`.
 - Automation: `AutoPurchaseItem`, `_sinceLastPurchase`, `_purchasesPerTab`, `Tick` for hotkey toggling.
 
