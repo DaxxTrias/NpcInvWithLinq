@@ -1,4 +1,4 @@
-﻿using ExileCore2;
+using ExileCore2;
 using ExileCore2.PoEMemory;
 using ExileCore2.PoEMemory.Elements;
 using ExileCore2.PoEMemory.MemoryObjects;
@@ -165,12 +165,12 @@ public partial class NPCInvWithLinq : BaseSettingsPlugin<NPCInvWithLinqSettings>
 			if (items.Count == 0) return;
 
 			// For non-tabbed panels, evaluate filters with the item's own TabIndex to avoid tab mismatch
-			var filtered = items.Where(it => ItemInFilterSafe(it, it.TabIndex)).ToList();
+			var filtered = GetMatchingItems(items).ToList();
 			if (filtered.Count == 0) return;
 
-			foreach (var item in filtered)
+			foreach (var (item, binding) in filtered)
 			{
-				DrawItemFrame(item, hoveredItem);
+				DrawItemFrame(item, hoveredItem, frameColorOverride: binding.Rule.Color);
 			}
 		}
 		catch { }
@@ -423,9 +423,9 @@ public partial class NPCInvWithLinq : BaseSettingsPlugin<NPCInvWithLinqSettings>
 		if (!GameController.IngameState.IngameUi.QuestRewardWindow.IsVisible) return;
 
 		var rewardItems = _rewardItems?.Value ?? [];
-		foreach (var reward in rewardItems.Where(x => ItemInFilterSafe(x, SpecialWindowTabIndex)))
+		foreach (var (reward, binding) in GetMatchingItems(rewardItems, SpecialWindowTabIndex))
 		{
-			var frameColor = GetFilterColor(reward);
+			var frameColor = binding.Rule.Color;
 			if (hoveredItem != null && hoveredItem.Tooltip.GetClientRectCache.Intersects(reward.ClientRectangle) && hoveredItem.Entity.Address != reward.Entity.Address)
 			{
 				frameColor = frameColor.Value.ToImguiVec4(45).ToColor();
@@ -439,9 +439,9 @@ public partial class NPCInvWithLinq : BaseSettingsPlugin<NPCInvWithLinqSettings>
 		if (!GameController.IngameState.IngameUi.RitualWindow.IsVisible) return;
 
 		var ritualItems = _ritualItems?.Value ?? [];
-		foreach (var reward in ritualItems.Where(x => ItemInFilterSafe(x, SpecialWindowTabIndex)))
+		foreach (var (reward, binding) in GetMatchingItems(ritualItems, SpecialWindowTabIndex))
 		{
-			var frameColor = GetFilterColor(reward);
+			var frameColor = binding.Rule.Color;
 			if (hoveredItem != null && hoveredItem.Tooltip.GetClientRectCache.Intersects(reward.ClientRectangle) && hoveredItem.Entity.Address != reward.Entity.Address)
 			{
 				frameColor = frameColor.Value.ToImguiVec4(45).ToColor();
@@ -629,7 +629,7 @@ public partial class NPCInvWithLinq : BaseSettingsPlugin<NPCInvWithLinqSettings>
 		var currentFrameItems = stamped.Where(s => s.SelectedIndex == _lastSelectedTabIndex && s.Frame == _frameCounter).Select(s => s.Data).ToList();
 		
 		// Now apply the item filter only to current frame items with valid entities
-		var renderables = currentFrameItems.Where(item => 
+		var currentVisibleTabItems = currentFrameItems.Where(item => 
 		{
 			try 
 			{ 
@@ -640,14 +640,14 @@ public partial class NPCInvWithLinq : BaseSettingsPlugin<NPCInvWithLinqSettings>
 				// Verify this item is actually from the selected tab
 				if (item.TabIndex >= 0 && item.TabIndex != _lastSelectedTabIndex)
 					return false;
-				
-				return ItemInFilter(item); 
+				return true; 
 			} 
 			catch 
 			{ 
 				return false; 
 			}
-		}).ToList();
+		});
+		var renderables = GetMatchingItems(currentVisibleTabItems, _lastSelectedTabIndex).ToList();
 		CustomItemData? nextToPurchase = null;
 		if (Settings.AutoPurchase)
 		{
@@ -655,12 +655,12 @@ public partial class NPCInvWithLinq : BaseSettingsPlugin<NPCInvWithLinqSettings>
 				purchaseCount = 0;
 			if (Settings.MaxPurchasesPerTab == 0 || purchaseCount < Settings.MaxPurchasesPerTab)
 			{
-				nextToPurchase = renderables.FirstOrDefault();
+				nextToPurchase = renderables.Select(match => match.Item).FirstOrDefault();
 			}
 		}
-		foreach (var visibleItem in renderables)
+		foreach (var (visibleItem, binding) in renderables)
 		{
-			DrawItemFrame(visibleItem, hoveredItem, visibleItem == nextToPurchase);
+			DrawItemFrame(visibleItem, hoveredItem, visibleItem == nextToPurchase, binding.Rule.Color);
 		}
 		if (Settings.AutoPurchase && _sinceLastPurchase.ElapsedMilliseconds >= Settings.PurchaseDelay && nextToPurchase != null)
 		{
@@ -708,13 +708,13 @@ public partial class NPCInvWithLinq : BaseSettingsPlugin<NPCInvWithLinqSettings>
 		}
 	}
 
-	private void DrawItemFrame(CustomItemData item, Element? hoveredItem, bool isNextToPurchase = false)
+	private void DrawItemFrame(CustomItemData item, Element? hoveredItem, bool isNextToPurchase = false, ColorNode? frameColorOverride = null)
 	{
 		var rect = item.ClientRectangle;
 		if (rect.Width <= 1 || rect.Height <= 1)
 			return;
 
-		var frameColor = isNextToPurchase ? Settings.AutoPurchaseColor : GetFilterColor(item);
+		var frameColor = isNextToPurchase ? Settings.AutoPurchaseColor : frameColorOverride ?? Settings.DefaultFrameColor;
 		if (hoveredItem != null)
 		{
 			bool intersectsHovered;
@@ -1168,8 +1168,35 @@ public partial class NPCInvWithLinq : BaseSettingsPlugin<NPCInvWithLinqSettings>
 	
 	private bool ItemInFilterSafe(CustomItemData item, int currentSelectedTabIndex)
 	{
-		if (_ruleBindings == null || item?.Entity == null || !item.Entity.IsValid) 
+		return TryGetMatchingRule(item, currentSelectedTabIndex, out _);
+	}
+
+	private IEnumerable<(CustomItemData Item, RuleBinding Binding)> GetMatchingItems(IEnumerable<CustomItemData> source, int? currentSelectedTabIndex = null)
+	{
+		foreach (var item in source)
+		{
+			var selectedIndex = currentSelectedTabIndex ?? item.TabIndex;
+			if (TryGetMatchingRule(item, selectedIndex, out var binding) && binding != null)
+				yield return (item, binding);
+		}
+	}
+
+	private bool TryGetMatchingRule(CustomItemData? item, int currentSelectedTabIndex, out RuleBinding? matchingBinding)
+	{
+		matchingBinding = null;
+
+		if (_ruleBindings == null || item?.Entity == null)
 			return false;
+
+		try
+		{
+			if (!item.Entity.IsValid)
+				return false;
+		}
+		catch
+		{
+			return false;
+		}
 		
 		// Special handling for haggle window items with negative TabIndex
 		// -1 = main haggle inventory, -2 = buyback inventory
@@ -1223,7 +1250,10 @@ public partial class NPCInvWithLinq : BaseSettingsPlugin<NPCInvWithLinqSettings>
 				}
 				
 				if (b.Filter.Matches(item))
+				{
+					matchingBinding = b;
 					return true;
+				}
 			}
 			catch
 			{
@@ -1234,34 +1264,6 @@ public partial class NPCInvWithLinq : BaseSettingsPlugin<NPCInvWithLinqSettings>
 			}
 		}
 		return false;
-	}
-
-	private ColorNode GetFilterColor(CustomItemData item)
-	{
-		if (_ruleBindings == null || _ruleBindings.Count == 0 || item?.Entity == null || !item.Entity.IsValid)
-			return Settings.DefaultFrameColor;
-		
-		// Top-to-bottom precedence: the first enabled rule that matches decides the color
-		foreach (var binding in _ruleBindings)
-		{
-			if (!binding.Rule.Enabled || binding.Filter == null)
-				continue;
-			try
-			{
-				if (!ExtraOpenAffixConstraintsPass(item, binding))
-					continue;
-				if (binding.Filter.Matches(item))
-				{
-					return binding.Rule.Color;
-				}
-			}
-			catch
-			{
-				// Silently skip items that cause filter evaluation errors
-				continue;
-			}
-		}
-		return Settings.DefaultFrameColor;
 	}
 
 	private ColorNode GetFilterColorForTab(IEnumerable<CustomItemData> items)
@@ -1276,33 +1278,8 @@ public partial class NPCInvWithLinq : BaseSettingsPlugin<NPCInvWithLinqSettings>
 		// For tab coloring, we use the safe filter check with current selected tab
 		foreach (var item in itemsList)
 		{
-			if (ItemInFilterSafe(item, _lastSelectedTabIndex))
-			{
-			// Get the color from the first matching rule
-			foreach (var binding in _ruleBindings)
-			{
-				if (!binding.Rule.Enabled || binding.Filter == null)
-					continue;
-				
-				// Determine if this item is from a hidden tab
-				bool isHiddenTab = item.TabIndex >= 0 && item.TabIndex != _lastSelectedTabIndex;
-				
-				try
-				{
-					// Skip rules with open affix constraints for hidden tabs
-					if (isHiddenTab && (binding.MinOpenPrefixes != null || binding.MinOpenSuffixes != null))
-						continue;
-						
-					if (binding.Filter.Matches(item))
-						return binding.Rule.Color;
-				}
-				catch
-				{
-					// Silently skip items that cause filter evaluation errors
-					continue;
-				}
-			}
-			}
+			if (TryGetMatchingRule(item, _lastSelectedTabIndex, out var binding) && binding != null)
+				return binding.Rule.Color;
 		}
 		
 		return Settings.DefaultFrameColor;
